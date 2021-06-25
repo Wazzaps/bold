@@ -12,7 +12,7 @@ RUST_BUILD_DIR := target/$(TARGET)
 RUST_DEBUG_LIB := $(RUST_BUILD_DIR)/debug/lib$(RUST_BINARY).a
 RUST_RELEASE_LIB := $(RUST_BUILD_DIR)/release/lib$(RUST_BINARY).a
 
-RUST_DEPS = Xargo.toml Cargo.toml build.rs $(LD_SCRIPT) src/*
+RUST_DEPS = Xargo.toml Cargo.toml build.rs $(LD_SCRIPT) $(shell find src/ -type f -name '*.rs')
 EXT_DEPS = $(BUILD_DIR)/init.o
 
 BUILD_DIR := build
@@ -73,3 +73,6 @@ clean:
 
 run: $(KERNEL).bin
 	qemu-system-aarch64 -M raspi3 -serial stdio -kernel $(KERNEL).bin
+
+qemugdb-run: $(KERNEL).bin
+	gdb -ex=r --args qemu-system-aarch64 -M raspi3 -serial stdio -kernel $(KERNEL).bin

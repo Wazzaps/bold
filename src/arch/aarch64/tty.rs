@@ -1,5 +1,6 @@
 use core::fmt;
 use crate::arch::aarch64::uart::RASPI_UART;
+use core::mem::size_of;
 
 /// Like the `print!` macro in the standard library, but prints to the UART.
 #[macro_export]
@@ -24,4 +25,18 @@ pub fn _print(args: fmt::Arguments) {
     // interrupts::without_interrupts(|| {
     //     MUXWRITER1.lock().write_fmt(args).unwrap();
     // });
+}
+
+pub fn dump_hex<T>(val: &T) {
+    let size = size_of::<T>();
+    let val = val as *const T as *const u8;
+    for i in 0..size {
+        unsafe {
+            print!("{:02x}", *val.offset(i as isize));
+        }
+        if i % 4 == 3 {
+            print!(" ");
+        }
+    }
+    println!();
 }

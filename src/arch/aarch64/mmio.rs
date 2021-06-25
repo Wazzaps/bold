@@ -87,7 +87,8 @@ pub fn delay(count: i32) {
             "1:",
             "sub {count:x}, {count:x}, #1",
             "bne 1b",
-            count = in(reg) count
+            count = inout(reg) count => _,
+            options(nomem, nostack)
         );
     }
 }
