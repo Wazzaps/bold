@@ -1,5 +1,7 @@
 use crate::console::Console;
+use crate::framebuffer::Framebuffer;
 use crate::println;
+use core::convert::{TryFrom, TryInto};
 use core::fmt;
 use core::fmt::{Debug, Formatter, Write};
 use core::ptr::{slice_from_raw_parts, slice_from_raw_parts_mut};
@@ -10,16 +12,43 @@ extern "C" {
     static mut __drivers_end: u8;
 }
 
-#[non_exhaustive]
+pub type ConsoleDriver = &'static RwLock<dyn Console + Send + Sync>;
+pub type FramebufferDriver = &'static RwLock<dyn Framebuffer + Send + Sync>;
+
 #[derive(Debug)]
 pub enum DriverType {
-    Console(&'static RwLock<dyn Console + Send + Sync>),
+    Console(ConsoleDriver),
+    Framebuffer(FramebufferDriver),
 }
 
 pub struct Driver {
     pub name: &'static [u8],
     pub initialized: bool,
     pub vtable: DriverType,
+}
+
+impl TryFrom<&Driver> for ConsoleDriver {
+    type Error = ();
+
+    fn try_from(driver: &Driver) -> Result<Self, Self::Error> {
+        if let DriverType::Console(console) = driver.vtable {
+            Ok(console)
+        } else {
+            Err(())
+        }
+    }
+}
+
+impl TryFrom<&Driver> for FramebufferDriver {
+    type Error = ();
+
+    fn try_from(driver: &Driver) -> Result<Self, Self::Error> {
+        if let DriverType::Framebuffer(framebuffer) = driver.vtable {
+            Ok(framebuffer)
+        } else {
+            Err(())
+        }
+    }
 }
 
 impl Debug for Driver {
@@ -47,16 +76,23 @@ pub unsafe fn drivers_mut() -> &'static mut [Driver] {
     }
 }
 
+fn init_driver(driver: &mut Driver) {
+    println!("[INFO] Initializing driver \"{:?}\"", driver);
+    match driver.vtable {
+        DriverType::Console(console) => {
+            console.write().init().unwrap();
+        }
+        DriverType::Framebuffer(framebuffer) => {
+            framebuffer.write().init().unwrap();
+        }
+    }
+    driver.initialized = true;
+}
+
 pub fn init_driver_by_name(name: &[u8]) {
     for driver in unsafe { drivers_mut() } {
         if driver.name == name && !driver.initialized {
-            println!("[INFO] Initializing driver \"{:?}\"", driver);
-            match driver.vtable {
-                DriverType::Console(console) => {
-                    console.write().init().unwrap();
-                }
-            }
-            driver.initialized = true;
+            init_driver(driver);
             return;
         }
     }
@@ -65,13 +101,16 @@ pub fn init_driver_by_name(name: &[u8]) {
 pub fn init_all_drivers() {
     for driver in unsafe { drivers_mut() } {
         if !driver.initialized {
-            println!("[INFO] Initializing driver \"{:?}\"", driver);
-            match driver.vtable {
-                DriverType::Console(console) => {
-                    console.write().init().unwrap();
-                }
-            }
-            driver.initialized = true;
+            init_driver(driver);
         }
     }
+}
+
+pub fn driver_by_type<'a, T: TryFrom<&'a Driver>>() -> Option<T> {
+    for driver in drivers() {
+        if let Ok(result) = driver.try_into() {
+            return Some(result);
+        }
+    }
+    return None;
 }

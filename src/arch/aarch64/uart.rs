@@ -112,7 +112,7 @@ static INSTANCE_RASPI_UART0: RwLock<RaspberryPiUART0> = RwLock::new(RaspberryPiU
 
 #[link_section = ".drivers"]
 #[used]
-static mut DRIVER_QEMU_CONSOLE: Driver = Driver {
+static mut DRIVER_RASPI_UART0: Driver = Driver {
     name: b"Raspberry Pi 3 UART0",
     initialized: false,
     vtable: DriverType::Console(&INSTANCE_RASPI_UART0),
