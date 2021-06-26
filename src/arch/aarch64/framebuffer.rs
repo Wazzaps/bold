@@ -38,11 +38,11 @@ static mut FB_INFO: FramebufferInfo = FramebufferInfo {
 
 pub unsafe fn init() {
     mailbox::write_raw(((&mut FB_INFO as *mut FramebufferInfo as usize as u32) & !0xF) | 1);
-    dump_hex(&FB_INFO);
-    // println!("{:?}", FB_INFO);
+    // dump_hex(&FB_INFO);
+    println!("{:?}", FB_INFO);
 }
 
-pub unsafe fn draw_example() {
+pub unsafe fn draw_example(variant: u32) {
     let fb_info = (&FB_INFO as *const FramebufferInfo).read_volatile();
     let fb: *mut u8 = fb_info.pointer as usize as *mut u8;
     let width = fb_info.width;
@@ -52,7 +52,7 @@ pub unsafe fn draw_example() {
     for y in 0..height {
         for x in 0..width {
             let pixel = fb.offset((y * pitch + x * 3) as isize);
-            pixel.offset(0).write_volatile((x % 256) as u8);
+            pixel.offset(0).write_volatile(((x + variant) % 256) as u8);
             pixel.offset(1).write_volatile((y % 256) as u8);
             pixel.offset(2).write_volatile(0);
         }

@@ -1,6 +1,4 @@
 use crate::arch::aarch64::mmio::{mmio_read, mmio_write, MBOX_READ, MBOX_STATUS, MBOX_WRITE};
-use crate::arch::aarch64::tty::dump_hex;
-use crate::println;
 use core::mem::{size_of, ManuallyDrop};
 
 /// This bit is set in the status register if there is no space to write into the mailbox
@@ -52,7 +50,6 @@ pub fn get_clock_rate(clock_id: u32) -> Result<u32, ()> {
 }
 
 pub fn set_clock_rate(clock_id: u32, rate: u32, skip_setting_turbo: bool) -> Result<u32, ()> {
-    // 2, 3000000, 0
     #[repr(C)]
     #[derive(Copy, Clone)]
     pub struct SetClockRateReq {
@@ -84,6 +81,33 @@ pub fn set_clock_rate(clock_id: u32, rate: u32, skip_setting_turbo: bool) -> Res
     };
 
     Ok(res.rate)
+}
+
+/// Returns uptime in microseconds
+pub fn get_stc() -> Result<u32, ()> {
+    #[repr(C)]
+    #[derive(Copy, Clone)]
+    pub struct GetStcReq;
+
+    #[repr(C)]
+    #[derive(Copy, Clone)]
+    pub struct GetStcRes {
+        time: u32,
+        unused: u32,
+    }
+
+    impl MailboxRequest for GetStcReq {
+        const ID: u32 = 0x0003000b;
+        type RESPONSE = GetStcRes;
+    }
+
+    let res = unsafe {
+        MailboxMessage::send((MailboxTag::new(GetStcReq),))?
+            .0
+            .data()?
+    };
+
+    Ok(res.time)
 }
 
 #[repr(align(4), C)]
@@ -139,7 +163,10 @@ impl<MSG> MailboxMessage<MSG> {
             end_tag: 0,
         };
 
-        write_raw(((&mut msg as *mut MailboxMessage<MSG> as *mut u8 as usize as u32) & !0xF) | 8);
+
+        let mbox_addr = &mut msg as *mut MailboxMessage<MSG> as *mut u8 as usize as u32;
+        write_raw((mbox_addr & !0xF) | 8);
+        // while read_raw(8) != mbox_addr {}
 
         // match msg.code {
         //     0x80000000 => Ok(msg.data),

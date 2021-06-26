@@ -50,6 +50,9 @@ pub const MBOX_READ: u32 = MBOX_BASE + 0x00;
 pub const MBOX_STATUS: u32 = MBOX_BASE + 0x18;
 pub const MBOX_WRITE: u32 = MBOX_BASE + 0x20;
 
+pub const SYSTMR_LO: u32 = MBOX_BASE + 0x3004;
+pub const SYSTMR_HI: u32 = MBOX_BASE + 0x3008;
+
 pub unsafe fn mmio_read(addr: u32) -> u32 {
     (addr as usize as *const u32).read_volatile()
 }
@@ -69,5 +72,61 @@ pub fn delay(count: i32) {
             count = inout(reg) count => _,
             options(nomem, nostack)
         );
+    }
+}
+
+// Unimplemented in QEMU
+pub fn get_system_timer() -> u64 {
+    unsafe {
+        let hi = mmio_read(SYSTMR_HI);
+        let lo = mmio_read(SYSTMR_LO);
+
+        ((hi as u64) << 32) | lo as u64
+    }
+}
+
+pub fn delay_us(time: u64) {
+    unsafe {
+        let mut freq: u64 = 0;
+        let mut counter: u64 = 0;
+        asm!(
+            "mrs {freq}, cntfrq_el0",
+            "mrs {counter}, cntpct_el0",
+            freq = out(reg) freq,
+            counter = out(reg) counter,
+            options(nomem, nostack)
+        );
+
+        let expires_at = counter + ((freq / 1000) * time) / 1000;
+        loop {
+            asm!(
+                "mrs {counter}, cntpct_el0",
+                counter = out(reg) counter,
+                options(nomem, nostack)
+            );
+            if counter >= expires_at {
+                break;
+            }
+        }
+    }
+}
+
+pub fn get_uptime_us() -> u64 {
+    unsafe {
+        let mut freq: u64 = 0;
+        let mut counter: u64 = 0;
+        asm!(
+            "mrs {freq}, cntfrq_el0",
+            "mrs {counter}, cntpct_el0",
+            freq = out(reg) freq,
+            counter = out(reg) counter,
+            options(nomem, nostack)
+        );
+
+        if freq == 0 {
+            0
+        } else {
+            counter * 1000 * 1000 / freq
+        }
     }
 }

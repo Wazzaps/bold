@@ -22,12 +22,12 @@ macro_rules! println {
 pub fn _print(args: fmt::Arguments) {
     use core::fmt::Write;
 
-    let _ = match RASPI_UART.try_lock() {
+    match RASPI_UART.try_lock() {
         Some(mut uart) => match uart.as_mut() {
-            None => loop {
-                delay(100);
-            },
-            Some(mut uart) => uart.write_fmt(args),
+            None => {}
+            Some(mut uart) => {
+                let _ = uart.write_fmt(args);
+            }
         },
         None => loop {
             delay(100);
