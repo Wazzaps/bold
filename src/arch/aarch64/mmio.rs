@@ -53,6 +53,11 @@ pub const MBOX_WRITE: u32 = MBOX_BASE + 0x20;
 pub const SYSTMR_LO: u32 = MBOX_BASE + 0x3004;
 pub const SYSTMR_HI: u32 = MBOX_BASE + 0x3008;
 
+pub const RNG_CTRL: u32 = MBOX_BASE + 0x00104000;
+pub const RNG_STATUS: u32 = MBOX_BASE + 0x00104004;
+pub const RNG_DATA: u32 = MBOX_BASE + 0x00104008;
+pub const RNG_INT_MASK: u32 = MBOX_BASE + 0x00104010;
+
 pub unsafe fn mmio_read(addr: u32) -> u32 {
     (addr as usize as *const u32).read_volatile()
 }
@@ -67,7 +72,7 @@ pub fn delay(count: i32) {
     unsafe {
         asm!(
             "1:",
-            "sub {count:x}, {count:x}, #1",
+            "subs {count:x}, {count:x}, #1",
             "bne 1b",
             count = inout(reg) count => _,
             options(nomem, nostack)

@@ -1,7 +1,6 @@
 use crate::arch::aarch64::mmio::{
     delay_us, mmio_read, mmio_write, MBOX_READ, MBOX_STATUS, MBOX_WRITE,
 };
-use crate::arch::aarch64::tty::dump_hex;
 use crate::println;
 use core::cmp::{max, min};
 use core::mem::size_of;

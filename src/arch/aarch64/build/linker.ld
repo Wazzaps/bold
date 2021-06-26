@@ -11,6 +11,10 @@ SECTIONS {
 
   .rodata : {
     *(.rodata .rodata.* .gnu.linkonce.r*)
+    . = ALIGN(8);
+    __drivers_start = .;
+    KEEP(*(.drivers*))
+    __drivers_end = .;
   }
 
   .data : {

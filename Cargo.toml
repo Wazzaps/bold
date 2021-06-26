@@ -29,3 +29,4 @@ linked_list_allocator = "0.9"
 spin = "0.5"
 lazy_static = { version = "1.4", features = ["spin_no_std"] }
 qemu-exit = "2.0.0"
+genio = { version = "0.2.1", default-features = false }

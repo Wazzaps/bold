@@ -3,23 +3,18 @@ use crate::arch::aarch64::mmio::{
     UART0_FR, UART0_IBRD, UART0_ICR, UART0_IMSC, UART0_LCRH,
 };
 use crate::arch::aarch64::{mailbox, mailbox_methods};
+use crate::console::Console;
+use crate::driver_manager::{Driver, DriverType};
 use crate::println;
 use core::fmt;
 use core::marker::PhantomData;
-use spin::Mutex;
+use spin::{Mutex, RwLock};
 
-pub struct RaspberryPiUART {
-    phantom: PhantomData<()>,
-}
+#[derive(Debug)]
+pub struct RaspberryPiUART0;
 
-pub static RASPI_UART: Mutex<Option<RaspberryPiUART>> = Mutex::new(None);
-
-pub fn init_global_uart() {
-    RASPI_UART.lock().replace(RaspberryPiUART::new());
-}
-
-impl RaspberryPiUART {
-    pub fn new() -> Self {
+impl Console for RaspberryPiUART0 {
+    fn init(&mut self) -> Result<(), ()> {
         unsafe {
             // Disable UART0.
             mmio_write(UART0_CR, 0x00000000);
@@ -83,29 +78,42 @@ impl RaspberryPiUART {
             // Enable UART0, receive & transfer part of UART.
             mmio_write(UART0_CR, (1 << 0) | (1 << 8) | (1 << 9));
         }
-        RaspberryPiUART {
-            phantom: PhantomData,
-        }
-    }
-
-    pub fn write_byte(&mut self, c: u8) {
-        unsafe {
-            // Wait for UART to become ready to transmit.
-            while mmio_read(UART0_FR) & (1 << 5) != 0 {}
-            mmio_write(UART0_DR, c as u32);
-        }
-    }
-
-    pub fn write_bytes(&mut self, s: &[u8]) {
-        for c in s {
-            self.write_byte(*c);
-        }
-    }
-}
-
-impl fmt::Write for RaspberryPiUART {
-    fn write_str(&mut self, s: &str) -> fmt::Result {
-        self.write_bytes(s.as_bytes());
         Ok(())
     }
+
+    fn as_byte_writer(&mut self) -> &mut dyn genio::Write<WriteError = (), FlushError = ()> {
+        self
+    }
 }
+
+impl genio::Write for RaspberryPiUART0 {
+    type WriteError = ();
+    type FlushError = ();
+
+    fn write(&mut self, buf: &[u8]) -> Result<usize, Self::WriteError> {
+        for c in buf {
+            unsafe {
+                // Wait for UART to become ready to transmit.
+                while mmio_read(UART0_FR) & (1 << 5) != 0 {}
+                mmio_write(UART0_DR, *c as u32);
+            }
+        }
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> Result<(), Self::FlushError> {
+        Ok(())
+    }
+
+    fn size_hint(&mut self, _bytes: usize) {}
+}
+
+static INSTANCE_RASPI_UART0: RwLock<RaspberryPiUART0> = RwLock::new(RaspberryPiUART0);
+
+#[link_section = ".drivers"]
+#[used]
+static mut DRIVER_QEMU_CONSOLE: Driver = Driver {
+    name: b"Raspberry Pi 3 UART0",
+    initialized: false,
+    vtable: DriverType::Console(&INSTANCE_RASPI_UART0),
+};
