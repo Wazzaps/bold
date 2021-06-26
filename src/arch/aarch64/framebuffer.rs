@@ -1,5 +1,4 @@
 use crate::arch::aarch64::mailbox;
-use crate::arch::aarch64::tty::dump_hex;
 use crate::println;
 
 // const FB_WIDTH: u32 = 1280;
@@ -38,7 +37,6 @@ static mut FB_INFO: FramebufferInfo = FramebufferInfo {
 
 pub unsafe fn init() {
     mailbox::write_raw(((&mut FB_INFO as *mut FramebufferInfo as usize as u32) & !0xF) | 1);
-    // dump_hex(&FB_INFO);
     println!("{:?}", FB_INFO);
 }
 

@@ -1,12 +1,11 @@
-use crate::arch::aarch64::mailbox;
 use crate::arch::aarch64::mmio::{
     delay, mmio_read, mmio_write, GPPUD, GPPUDCLK0, RASPI, UART0_CR, UART0_DR, UART0_FBRD,
     UART0_FR, UART0_IBRD, UART0_ICR, UART0_IMSC, UART0_LCRH,
 };
+use crate::arch::aarch64::{mailbox, mailbox_methods};
 use crate::println;
 use core::fmt;
 use core::marker::PhantomData;
-use lazy_static::lazy_static;
 use spin::Mutex;
 
 pub struct RaspberryPiUART {
@@ -54,7 +53,7 @@ impl RaspberryPiUART {
                 // UART_CLOCK = 30000000
                 // A Mailbox message with set clock rate of PL011 to 3MHz tag
                 // println!("Previous clock: {}", mailbox::get_clock_rate(2).unwrap());
-                mailbox::set_clock_rate(2, 3000000, false).unwrap();
+                mailbox_methods::set_clock_rate(2, 3000000, false).unwrap();
                 // println!("New clock: {}", mailbox::get_clock_rate(2).unwrap());
                 // let mut mbox = MBoxMsg([9 * 4, 0, 0x38002, 12, 8, 2, 3000000, 0, 0]);
                 // mailbox::write_raw(((&mut mbox as *mut MBoxMsg as *mut u8 as usize as u32) & !0xF) | 8);

@@ -25,13 +25,11 @@ pub fn _print(args: fmt::Arguments) {
     match RASPI_UART.try_lock() {
         Some(mut uart) => match uart.as_mut() {
             None => {}
-            Some(mut uart) => {
+            Some(uart) => {
                 let _ = uart.write_fmt(args);
             }
         },
-        None => loop {
-            delay(100);
-        },
+        None => {}
     };
 
     // interrupts::without_interrupts(|| {
