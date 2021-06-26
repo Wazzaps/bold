@@ -1,6 +1,8 @@
+use crate::arch::aarch64::mmio::delay;
+use crate::arch::aarch64::uart::{RaspberryPiUART, RASPI_UART};
 use core::fmt;
-use crate::arch::aarch64::uart::RASPI_UART;
 use core::mem::size_of;
+use spin::{Mutex, MutexGuard};
 
 /// Like the `print!` macro in the standard library, but prints to the UART.
 #[macro_export]
@@ -20,7 +22,17 @@ macro_rules! println {
 pub fn _print(args: fmt::Arguments) {
     use core::fmt::Write;
 
-    let _ = RASPI_UART.lock().write_fmt(args);
+    let _ = match RASPI_UART.try_lock() {
+        Some(mut uart) => match uart.as_mut() {
+            None => loop {
+                delay(100);
+            },
+            Some(mut uart) => uart.write_fmt(args),
+        },
+        None => loop {
+            delay(100);
+        },
+    };
 
     // interrupts::without_interrupts(|| {
     //     MUXWRITER1.lock().write_fmt(args).unwrap();

@@ -72,7 +72,7 @@ clean:
 	rm -rf $(BUILD_DIR)
 
 run: $(KERNEL).bin
-	qemu-system-aarch64 -M raspi3 -serial stdio -kernel $(KERNEL).bin
+	qemu-system-aarch64 -M raspi3 -serial stdio -semihosting -kernel $(KERNEL).bin -s
 
 qemugdb-run: $(KERNEL).bin
 	gdb -ex=r --args qemu-system-aarch64 -M raspi3 -serial stdio -kernel $(KERNEL).bin

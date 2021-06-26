@@ -1,7 +1,9 @@
+use crate::arch::aarch64::mailbox;
 use crate::arch::aarch64::mmio::{
-    delay, mailbox_write, mmio_read, mmio_write, GPPUD, GPPUDCLK0, RASPI, UART0_CR, UART0_DR,
-    UART0_FBRD, UART0_FR, UART0_IBRD, UART0_ICR, UART0_IMSC, UART0_LCRH,
+    delay, mmio_read, mmio_write, GPPUD, GPPUDCLK0, RASPI, UART0_CR, UART0_DR, UART0_FBRD,
+    UART0_FR, UART0_IBRD, UART0_ICR, UART0_IMSC, UART0_LCRH,
 };
+use crate::println;
 use core::fmt;
 use core::marker::PhantomData;
 use lazy_static::lazy_static;
@@ -11,8 +13,10 @@ pub struct RaspberryPiUART {
     phantom: PhantomData<()>,
 }
 
-lazy_static! {
-    pub static ref RASPI_UART: Mutex<RaspberryPiUART> = Mutex::new(RaspberryPiUART::new());
+pub static RASPI_UART: Mutex<Option<RaspberryPiUART>> = Mutex::new(None);
+
+pub fn init_global_uart() {
+    RASPI_UART.lock().replace(RaspberryPiUART::new());
 }
 
 impl RaspberryPiUART {
@@ -49,8 +53,11 @@ impl RaspberryPiUART {
 
                 // UART_CLOCK = 30000000
                 // A Mailbox message with set clock rate of PL011 to 3MHz tag
-                let mut mbox = MBoxMsg([9 * 4, 0, 0x38002, 12, 8, 2, 3000000, 0, 0]);
-                mailbox_write(((&mut mbox as *mut MBoxMsg as *mut u8 as usize as u32) & !0xF) | 8);
+                // println!("Previous clock: {}", mailbox::get_clock_rate(2).unwrap());
+                mailbox::set_clock_rate(2, 3000000, false).unwrap();
+                // println!("New clock: {}", mailbox::get_clock_rate(2).unwrap());
+                // let mut mbox = MBoxMsg([9 * 4, 0, 0x38002, 12, 8, 2, 3000000, 0, 0]);
+                // mailbox::write_raw(((&mut mbox as *mut MBoxMsg as *mut u8 as usize as u32) & !0xF) | 8);
             }
 
             // Divider = 3000000 / (16 * 115200) = 1.627 = ~1.
@@ -64,7 +71,14 @@ impl RaspberryPiUART {
             // Mask all interrupts.
             mmio_write(
                 UART0_IMSC,
-                (1 << 1) | (1 << 4) | (1 << 5) | (1 << 6) | (1 << 7) | (1 << 8) | (1 << 9) | (1 << 10),
+                (1 << 1)
+                    | (1 << 4)
+                    | (1 << 5)
+                    | (1 << 6)
+                    | (1 << 7)
+                    | (1 << 8)
+                    | (1 << 9)
+                    | (1 << 10),
             );
 
             // Enable UART0, receive & transfer part of UART.
@@ -96,4 +110,3 @@ impl fmt::Write for RaspberryPiUART {
         Ok(())
     }
 }
-

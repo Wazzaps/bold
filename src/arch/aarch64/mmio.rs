@@ -50,33 +50,12 @@ pub const MBOX_READ: u32 = MBOX_BASE + 0x00;
 pub const MBOX_STATUS: u32 = MBOX_BASE + 0x18;
 pub const MBOX_WRITE: u32 = MBOX_BASE + 0x20;
 
-/// This bit is set in the status register if there is no space to write into the mailbox
-pub const MAIL_FULL: u32 = 0x80000000;
-
-/// This bit is set in the status register if there is nothing to read from the mailbox
-pub const MAIL_EMPTY: u32 = 0x40000000;
-
 pub unsafe fn mmio_read(addr: u32) -> u32 {
     (addr as usize as *const u32).read_volatile()
 }
 
 pub unsafe fn mmio_write(addr: u32, value: u32) {
     (addr as usize as *mut u32).write_volatile(value);
-}
-
-pub unsafe fn mailbox_write(data: u32) {
-    while mmio_read(MBOX_STATUS) & MAIL_FULL != 0 {}
-    mmio_write(MBOX_WRITE, data);
-}
-
-pub unsafe fn mailbox_read(channel: u32) -> u32 {
-    loop {
-        while (mmio_read(MBOX_STATUS) & MAIL_EMPTY) == 0 {}
-        let val = mmio_read(MBOX_READ);
-        if val & 0xF == channel {
-            return val & !0xF;
-        }
-    }
 }
 
 #[inline(always)]

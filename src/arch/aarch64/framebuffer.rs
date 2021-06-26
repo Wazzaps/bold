@@ -1,12 +1,12 @@
-use crate::arch::aarch64::mmio::{mailbox_write, delay};
-use crate::println;
+use crate::arch::aarch64::mailbox;
 use crate::arch::aarch64::tty::dump_hex;
+use crate::println;
 
-const FB_WIDTH: u32 = 1280;
-const FB_HEIGHT: u32 = 720;
+// const FB_WIDTH: u32 = 1280;
+// const FB_HEIGHT: u32 = 720;
 
-// const FB_WIDTH: u32 = 640;
-// const FB_HEIGHT: u32 = 480;
+const FB_WIDTH: u32 = 640;
+const FB_HEIGHT: u32 = 480;
 
 #[derive(Debug)]
 #[repr(align(16), C)]
@@ -33,12 +33,13 @@ static mut FB_INFO: FramebufferInfo = FramebufferInfo {
     x_offset: 0,
     y_offset: 0,
     pointer: 0,
-    size: 0
+    size: 0,
 };
 
 pub unsafe fn init() {
-    mailbox_write(((&mut FB_INFO as *mut FramebufferInfo as usize as u32) & !0xF) | 1);
-    println!("{:?}", FB_INFO);
+    mailbox::write_raw(((&mut FB_INFO as *mut FramebufferInfo as usize as u32) & !0xF) | 1);
+    dump_hex(&FB_INFO);
+    // println!("{:?}", FB_INFO);
 }
 
 pub unsafe fn draw_example() {
