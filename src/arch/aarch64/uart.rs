@@ -2,19 +2,22 @@ use crate::arch::aarch64::mmio::{
     delay, mmio_read, mmio_write, GPPUD, GPPUDCLK0, RASPI, UART0_CR, UART0_DR, UART0_FBRD,
     UART0_FR, UART0_IBRD, UART0_ICR, UART0_IMSC, UART0_LCRH,
 };
-use crate::arch::aarch64::{mailbox, mailbox_methods};
-use crate::console::Console;
-use crate::driver_manager::{Driver, DriverType};
-use crate::println;
-use core::fmt;
-use core::marker::PhantomData;
-use spin::{Mutex, RwLock};
+use crate::arch::aarch64::mailbox_methods;
+use crate::driver_manager::{DeviceType, DriverInfo};
+use crate::file_interface::IoResult;
+use crate::{driver_manager, fi};
+use core::cell::UnsafeCell;
+use spin::RwLock;
+
+// ----- Driver -----
 
 #[derive(Debug)]
-pub struct RaspberryPiUART0;
+struct Driver {
+    info: UnsafeCell<DriverInfo>,
+}
 
-impl Console for RaspberryPiUART0 {
-    fn init(&mut self) -> Result<(), ()> {
+impl driver_manager::Driver for Driver {
+    fn init(&self) -> Result<(), ()> {
         unsafe {
             // Disable UART0.
             mmio_write(UART0_CR, 0x00000000);
@@ -78,19 +81,45 @@ impl Console for RaspberryPiUART0 {
             // Enable UART0, receive & transfer part of UART.
             mmio_write(UART0_CR, (1 << 0) | (1 << 8) | (1 << 9));
         }
+        // FIXME: Vulnerability
+        unsafe {
+            (*self.info.get()).initialized = true;
+        }
         Ok(())
     }
 
-    fn as_byte_writer(&mut self) -> &mut dyn genio::Write<WriteError = (), FlushError = ()> {
-        self
+    fn info(&'static self) -> &'static DriverInfo {
+        // FIXME: Vulnerability
+        unsafe { self.info.get().as_ref().unwrap() }
     }
 }
 
-impl genio::Write for RaspberryPiUART0 {
-    type WriteError = ();
-    type FlushError = ();
+static mut DRIVER: Driver = Driver {
+    info: UnsafeCell::new(DriverInfo {
+        name: b"Raspberry Pi 3 UART0",
+        initialized: false,
+        devices: RwLock::new([driver_manager::Device {
+            device_type: DeviceType::Console,
+            interface: fi::FileInterface {
+                read: None,
+                write: Some(&DEVICE),
+                ctrl: None,
+            },
+        }]),
+    }),
+};
 
-    fn write(&mut self, buf: &[u8]) -> Result<usize, Self::WriteError> {
+#[link_section = ".drivers"]
+#[used]
+static mut DRIVER_REF: &dyn driver_manager::Driver = unsafe { &DRIVER };
+
+// ----- Device -----
+
+#[derive(Debug)]
+struct Device;
+
+impl fi::Write for Device {
+    fn write(&self, buf: &[u8]) -> IoResult<usize> {
         for c in buf {
             unsafe {
                 // Wait for UART to become ready to transmit.
@@ -100,20 +129,6 @@ impl genio::Write for RaspberryPiUART0 {
         }
         Ok(buf.len())
     }
-
-    fn flush(&mut self) -> Result<(), Self::FlushError> {
-        Ok(())
-    }
-
-    fn size_hint(&mut self, _bytes: usize) {}
 }
 
-static INSTANCE_RASPI_UART0: RwLock<RaspberryPiUART0> = RwLock::new(RaspberryPiUART0);
-
-#[link_section = ".drivers"]
-#[used]
-static mut DRIVER_RASPI_UART0: Driver = Driver {
-    name: b"Raspberry Pi 3 UART0",
-    initialized: false,
-    vtable: DriverType::Console(&INSTANCE_RASPI_UART0),
-};
+static DEVICE: Device = Device;

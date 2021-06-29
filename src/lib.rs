@@ -4,19 +4,24 @@
 #![no_builtins]
 #![no_std]
 #![allow(warnings)]
+#![deny(unused_imports)]
+#![deny(unused_import_braces)]
 
 use crate::arch::aarch64::mmio::{delay_us, get_uptime_us};
-use crate::arch::aarch64::{entropy, mailbox_methods, uart};
-use crate::driver_manager::FramebufferDriver;
-use crate::framebuffer::Framebuffer;
+use crate::arch::aarch64::mailbox_methods;
 use qemu_exit::QEMUExit;
-use spin::RwLock;
 
 pub(crate) mod arch;
 pub(crate) mod console;
 pub(crate) mod driver_manager;
+mod file_interface;
 pub(crate) mod framebuffer;
 mod lang_items;
+mod utils;
+
+use crate::driver_manager::DeviceType;
+pub(crate) use file_interface as fi;
+pub(crate) use utils::*;
 
 fn vsync<F: FnMut()>(mut f: F) {
     let start = get_uptime_us();
@@ -54,12 +59,13 @@ pub unsafe extern "C" fn kmain() {
 
     // Draw something
     println!("[INFO] Drawing something");
-    let mut framebuffer = driver_manager::driver_by_type::<FramebufferDriver>()
+    let mut framebuffer = driver_manager::device_by_type(DeviceType::Framebuffer)
         .unwrap()
-        .write();
-    for i in 0..100 {
+        .ctrl
+        .unwrap();
+    for i in 0..1000000 {
         vsync(|| {
-            framebuffer.draw_example(i);
+            framebuffer.call(framebuffer::FramebufferCM::DrawExample { variant: i });
         });
     }
     println!("[INFO] Draw ok");

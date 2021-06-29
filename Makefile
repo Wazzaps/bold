@@ -76,3 +76,6 @@ run: $(KERNEL).bin
 
 qemugdb-run: $(KERNEL).bin
 	gdb -ex=r --args qemu-system-aarch64 -M raspi3 -serial stdio -kernel $(KERNEL).bin
+
+gdb:
+	/opt/compilers/gcc-arm-10.2-2020.11-x86_64-aarch64-none-elf/bin/aarch64-none-elf-gdb -ex 'target remote :1234' $(KERNEL).elf

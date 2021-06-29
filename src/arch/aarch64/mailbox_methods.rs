@@ -1,5 +1,4 @@
 use crate::arch::aarch64::mailbox::send_property_tag;
-use core::mem::size_of;
 
 pub fn get_clock_rate(clock_id: u32) -> Result<u32, ()> {
     #[repr(C)]

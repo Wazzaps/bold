@@ -1,10 +1,7 @@
-use crate::console::Console;
-use crate::framebuffer::Framebuffer;
-use crate::println;
-use core::convert::{TryFrom, TryInto};
-use core::fmt;
-use core::fmt::{Debug, Formatter, Write};
+use crate::{display_bstr, fi, println};
+use core::fmt::{Debug, Formatter};
 use core::ptr::{slice_from_raw_parts, slice_from_raw_parts_mut};
+use core::{fmt, mem};
 use spin::RwLock;
 
 extern "C" {
@@ -12,104 +9,116 @@ extern "C" {
     static mut __drivers_end: u8;
 }
 
-pub type ConsoleDriver = &'static RwLock<dyn Console + Send + Sync>;
-pub type FramebufferDriver = &'static RwLock<dyn Framebuffer + Send + Sync>;
-
-#[derive(Debug)]
-pub enum DriverType {
-    Console(ConsoleDriver),
-    Framebuffer(FramebufferDriver),
-}
-
-pub struct Driver {
-    pub name: &'static [u8],
-    pub initialized: bool,
-    pub vtable: DriverType,
-}
-
-impl TryFrom<&Driver> for ConsoleDriver {
-    type Error = ();
-
-    fn try_from(driver: &Driver) -> Result<Self, Self::Error> {
-        if let DriverType::Console(console) = driver.vtable {
-            Ok(console)
-        } else {
-            Err(())
-        }
-    }
-}
-
-impl TryFrom<&Driver> for FramebufferDriver {
-    type Error = ();
-
-    fn try_from(driver: &Driver) -> Result<Self, Self::Error> {
-        if let DriverType::Framebuffer(framebuffer) = driver.vtable {
-            Ok(framebuffer)
-        } else {
-            Err(())
-        }
-    }
-}
-
-impl Debug for Driver {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        self.name.iter().for_each(|c| {
-            f.write_char(char::from(*c));
-        });
+pub trait Driver {
+    fn init(&self) -> Result<(), ()> {
         Ok(())
     }
+
+    // FIXME: Once allocator works, change devices to be refcounted and remove 'static lifetime
+    fn info(&'static self) -> &'static DriverInfo;
 }
 
-pub fn drivers() -> &'static [Driver] {
+impl Debug for &'static dyn Driver {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        // FIXME: Vulnerability
+        let self_static: &'static Self = unsafe { mem::transmute(self) };
+        self_static.info().fmt(f)
+    }
+}
+
+impl Debug for &'static mut dyn Driver {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        // FIXME: Vulnerability
+        let self_static: &'static Self = unsafe { mem::transmute(self) };
+        self_static.info().fmt(f)
+    }
+}
+
+pub struct DriverInfo {
+    pub name: &'static [u8],
+    pub initialized: bool,
+    // pub devices: RwLock<ArrayVec<Device, 4>>,
+    pub devices: RwLock<[Device; 1]>,
+}
+
+impl DriverInfo {
+    pub fn device_by_type(
+        &'static self,
+        device_type: DeviceType,
+    ) -> Option<&'static fi::FileInterface> {
+        for dev in self.devices.read().iter() {
+            if dev.device_type == device_type {
+                let interface: &'static fi::FileInterface =
+                    unsafe { mem::transmute(&dev.interface) };
+                return Some(interface);
+            }
+        }
+        return None;
+    }
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum DeviceType {
+    Console,
+    Framebuffer,
+}
+
+pub struct Device {
+    pub device_type: DeviceType,
+    pub interface: fi::FileInterface,
+}
+
+impl Debug for DriverInfo {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        display_bstr(f, self.name)
+    }
+}
+
+pub fn drivers() -> &'static [&'static dyn Driver] {
     unsafe {
-        let start = &__drivers_start as *const u8 as *const Driver;
-        let end = &__drivers_end as *const u8 as *const Driver;
+        let start = &__drivers_start as *const u8 as *const &dyn Driver;
+        let end = &__drivers_end as *const u8 as *const &dyn Driver;
         &*slice_from_raw_parts(start, end.offset_from(start) as usize)
     }
 }
 
-pub unsafe fn drivers_mut() -> &'static mut [Driver] {
+pub unsafe fn drivers_mut() -> &'static mut [&'static mut dyn Driver] {
     unsafe {
-        let start = &mut __drivers_start as *mut u8 as *mut Driver;
-        let end = &mut __drivers_end as *mut u8 as *mut Driver;
+        let start = &mut __drivers_start as *mut u8 as *mut &mut dyn Driver;
+        let end = &mut __drivers_end as *mut u8 as *mut &mut dyn Driver;
         &mut *slice_from_raw_parts_mut(start, end.offset_from(start) as usize)
     }
 }
 
-fn init_driver(driver: &mut Driver) {
+fn init_driver(driver: &'static dyn Driver) -> Result<(), ()> {
     println!("[INFO] Initializing driver \"{:?}\"", driver);
-    match driver.vtable {
-        DriverType::Console(console) => {
-            console.write().init().unwrap();
-        }
-        DriverType::Framebuffer(framebuffer) => {
-            framebuffer.write().init().unwrap();
-        }
-    }
-    driver.initialized = true;
+
+    driver.init()
 }
 
-pub fn init_driver_by_name(name: &[u8]) {
-    for driver in unsafe { drivers_mut() } {
-        if driver.name == name && !driver.initialized {
-            init_driver(driver);
-            return;
+pub fn init_driver_by_name(name: &[u8]) -> Result<(), ()> {
+    // for driver in unsafe { drivers_mut() } {
+    for driver in drivers() {
+        let info = driver.info();
+        if !info.initialized && info.name == name {
+            return init_driver(*driver);
         }
     }
+    Err(())
 }
 
 pub fn init_all_drivers() {
     for driver in unsafe { drivers_mut() } {
-        if !driver.initialized {
-            init_driver(driver);
+        if !driver.info().initialized {
+            init_driver(*driver);
         }
     }
 }
 
-pub fn driver_by_type<'a, T: TryFrom<&'a Driver>>() -> Option<T> {
+pub fn device_by_type(device_type: DeviceType) -> Option<&'static fi::FileInterface> {
     for driver in drivers() {
-        if let Ok(result) = driver.try_into() {
-            return Some(result);
+        if let Some(interface) = driver.info().device_by_type(device_type) {
+            return Some(interface);
         }
     }
     return None;

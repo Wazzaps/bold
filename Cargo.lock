@@ -3,15 +3,6 @@
 version = 3
 
 [[package]]
-name = "genio"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4e26859a808ffa83a83f20c7e3c9366afea91edae637a6ac203051885882dc8"
-dependencies = [
- "void",
-]
-
-[[package]]
 name = "lazy_static"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -54,7 +45,6 @@ checksum = "fc874b127765f014d792f16763a81245ab80500e2ad921ed4ee9e82481ee08fe"
 name = "rpi_kern_rs"
 version = "0.1.0"
 dependencies = [
- "genio",
  "lazy_static",
  "linked_list_allocator",
  "qemu-exit",
@@ -82,9 +72,3 @@ checksum = "75adad84ee84b521fb2cca2d4fd0f1dab1d8d026bda3c5bea4ca63b5f9f9293c"
 dependencies = [
  "lock_api",
 ]
-
-[[package]]
-name = "void"
-version = "1.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a02e4885ed3bc0f2de90ea6dd45ebcbb66dacffe03547fadbb0eeae2770887d"

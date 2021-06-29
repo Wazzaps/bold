@@ -1,63 +1,21 @@
-use crate::driver_manager::{drivers, Driver, DriverType};
+use crate::driver_manager::{drivers, DeviceType};
+use crate::fi;
 use core::fmt;
-use core::fmt::Debug;
 use core::mem::size_of;
-use core::ops::DerefMut;
-use spin::{Mutex, RwLock};
+use spin::RwLock;
 
-static MAIN_CONSOLE: Mutex<
-    Option<&'static RwLock<dyn Console<WriteError = (), FlushError = ()> + Send + Sync>>,
-> = Mutex::new(None);
-
-#[derive(Debug)]
-struct MainConsole;
-
-impl Console for MainConsole {
-    fn init(&mut self) -> Result<(), ()> {
-        Ok(())
-    }
-
-    fn as_byte_writer(&mut self) -> &mut dyn genio::Write<WriteError = (), FlushError = ()> {
-        self
-    }
-}
-
-impl genio::Write for MainConsole {
-    type WriteError = ();
-    type FlushError = ();
-
-    fn write(&mut self, buf: &[u8]) -> Result<usize, Self::WriteError> {
-        match MAIN_CONSOLE.lock().as_mut() {
-            None => Err(()),
-            Some(console) => console.write().write(buf),
-        }
-    }
-
-    fn flush(&mut self) -> Result<(), Self::FlushError> {
-        match MAIN_CONSOLE.lock().as_mut() {
-            None => Err(()),
-            Some(console) => console.write().flush(),
-        }
-    }
-
-    fn size_hint(&mut self, _bytes: usize) {}
-}
+static MAIN_CONSOLE: RwLock<Option<&'static fi::FileInterface>> = RwLock::new(None);
 
 pub fn set_main_console_by_name(name: &[u8]) {
     for driver in drivers() {
-        if driver.name == name {
-            if let DriverType::Console(console) = driver.vtable {
-                MAIN_CONSOLE.lock().replace(console);
+        if driver.info().name == name {
+            if let Some(interface) = driver.info().device_by_type(DeviceType::Console) {
+                MAIN_CONSOLE.write().replace(interface);
                 return;
             }
         }
     }
     panic!("Couldn't find the requested console driver: {:?}", name);
-}
-
-pub trait Console: genio::Write<WriteError = (), FlushError = ()> + Debug {
-    fn init(&mut self) -> Result<(), ()>;
-    fn as_byte_writer(&mut self) -> &mut dyn genio::Write<WriteError = (), FlushError = ()>;
 }
 
 /// Like the `print!` macro in the standard library, but prints to the UART.
@@ -73,10 +31,11 @@ macro_rules! println {
     ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
 }
 
-struct FmtWriteAdapter<'a>(&'a mut dyn genio::Write<WriteError = (), FlushError = ()>);
+struct FmtWriteAdapter<'a>(&'a dyn fi::Write);
 
 impl fmt::Write for FmtWriteAdapter<'_> {
     fn write_str(&mut self, s: &str) -> fmt::Result {
+        // self.0.write_all(s.as_bytes()).map_err(|_| Err(fmt::Error))?;
         self.0.write_all(s.as_bytes());
         Ok(())
     }
@@ -87,8 +46,8 @@ impl fmt::Write for FmtWriteAdapter<'_> {
 pub fn _print(args: fmt::Arguments) {
     use core::fmt::Write;
 
-    if let Some(console) = MAIN_CONSOLE.lock().as_mut() {
-        FmtWriteAdapter(console.write().as_byte_writer().deref_mut()).write_fmt(args);
+    if let Some(console) = MAIN_CONSOLE.read().as_deref() {
+        FmtWriteAdapter(console.write.unwrap()).write_fmt(args);
     }
 }
 
