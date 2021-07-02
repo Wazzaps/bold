@@ -32,6 +32,9 @@ SECTIONS {
 
   /* end of the binary */
   _end = ALIGN(8);
+  __ram_start = ALIGN(4096);
+  . = 0x40000000;
+  __ram_end = .;
 
   /* number of bytes in BSS section and complete binary */
   __bss_length = (__bss_end - __bss_start);

@@ -1,8 +1,8 @@
+use crate::arch::aarch64::mailbox_methods;
 use crate::arch::aarch64::mmio::{
     delay, mmio_read, mmio_write, GPPUD, GPPUDCLK0, RASPI, UART0_CR, UART0_DR, UART0_FBRD,
     UART0_FR, UART0_IBRD, UART0_ICR, UART0_IMSC, UART0_LCRH,
 };
-use crate::arch::aarch64::mailbox_methods;
 use crate::driver_manager::{DeviceType, DriverInfo};
 use crate::file_interface::IoResult;
 use crate::{driver_manager, fi};

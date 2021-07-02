@@ -1,15 +1,18 @@
 #![feature(lang_items)]
 #![feature(asm)]
 #![feature(panic_info_message)]
+#![feature(default_alloc_error_handler)]
 #![no_builtins]
 #![no_std]
 #![allow(warnings)]
-#![deny(unused_imports)]
-#![deny(unused_import_braces)]
+#![warn(unused_imports)]
+#![warn(unused_import_braces)]
 
 use crate::arch::aarch64::mmio::{delay_us, get_uptime_us};
-use crate::arch::aarch64::mailbox_methods;
+use crate::arch::aarch64::{mailbox_methods, phymem, virtmem};
 use qemu_exit::QEMUExit;
+use alloc::boxed::Box;
+use crate::driver_manager::DeviceType;
 
 pub(crate) mod arch;
 pub(crate) mod console;
@@ -19,7 +22,6 @@ pub(crate) mod framebuffer;
 mod lang_items;
 mod utils;
 
-use crate::driver_manager::DeviceType;
 pub(crate) use file_interface as fi;
 pub(crate) use utils::*;
 
@@ -34,10 +36,27 @@ fn vsync<F: FnMut()>(mut f: F) {
 
 #[no_mangle]
 pub unsafe extern "C" fn kmain() {
+    // Early console
     driver_manager::init_driver_by_name(b"QEMU-Only Raspberry Pi 3 UART0");
     console::set_main_console_by_name(b"QEMU-Only Raspberry Pi 3 UART0");
     println!("--- Bold Kernel v{} ---", env!("CARGO_PKG_VERSION"));
     println!("[INFO] Early console working");
+
+    // Memory allocator
+    phymem::PHYMEM_FREE_LIST.lock().init();
+    let kernel_virtmem = phymem::PHYMEM_FREE_LIST
+        .lock()
+        .alloc_pages(16384)
+        .expect("Failed to allocate dynamic kernel memory"); // 64MiB
+    virtmem::init(kernel_virtmem);
+
+    // Test it
+    {
+        let heap_val = Box::new(123);
+        let heap_val2 = Box::new(321);
+        println!("Boxed val: {} (at &{:p})", heap_val, &heap_val);
+        println!("Boxed val2: {} (at &{:p})", heap_val2, &heap_val2);
+    }
 
     println!("[INFO] Loaded drivers: {:?}", driver_manager::drivers());
 
