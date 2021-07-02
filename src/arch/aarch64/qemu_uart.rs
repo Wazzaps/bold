@@ -24,7 +24,7 @@ static mut DRIVER: Driver = Driver {
         devices: RwLock::new([driver_manager::Device {
             device_type: DeviceType::Console,
             interface: fi::FileInterface {
-                read: None,
+                read: Some(&DEVICE),
                 write: Some(&DEVICE),
                 ctrl: None,
             },
@@ -51,6 +51,20 @@ impl fi::Write for Device {
             }
         }
         Ok(buf.len())
+    }
+}
+
+impl fi::Read for Device {
+    fn read(&self, buf: &mut [u8]) -> IoResult<usize> {
+        if buf.len() == 0 {
+            return Ok(0);
+        }
+        unsafe {
+            // Wait for UART to become ready to receive.
+            while mmio_read(UART0_FR) & (1 << 4) != 0 {}
+            buf[0] = mmio_read(UART0_DR) as u8;
+        }
+        Ok(1)
     }
 }
 

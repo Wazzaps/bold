@@ -117,8 +117,10 @@ pub fn init_all_drivers() {
 
 pub fn device_by_type(device_type: DeviceType) -> Option<&'static fi::FileInterface> {
     for driver in drivers() {
-        if let Some(interface) = driver.info().device_by_type(device_type) {
-            return Some(interface);
+        if driver.info().initialized {
+            if let Some(interface) = driver.info().device_by_type(device_type) {
+                return Some(interface);
+            }
         }
     }
     return None;

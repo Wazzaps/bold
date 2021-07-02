@@ -8,6 +8,8 @@
 #![warn(unused_imports)]
 #![warn(unused_import_braces)]
 
+extern crate alloc;
+
 use crate::arch::aarch64::mmio::{delay_us, get_uptime_us};
 use crate::arch::aarch64::{mailbox_methods, phymem, virtmem};
 use qemu_exit::QEMUExit;
@@ -41,6 +43,14 @@ pub unsafe extern "C" fn kmain() {
     console::set_main_console_by_name(b"QEMU-Only Raspberry Pi 3 UART0");
     println!("--- Bold Kernel v{} ---", env!("CARGO_PKG_VERSION"));
     println!("[INFO] Early console working");
+
+    // Try input
+    // let con = driver_manager::device_by_type(DeviceType::Console).unwrap();
+    // let mut buf = [0; 4];
+    // con.read.unwrap()
+    //     .read_exact(&mut buf).unwrap();
+    // println!("{:?}", buf);
+
 
     // Memory allocator
     phymem::PHYMEM_FREE_LIST.lock().init();
