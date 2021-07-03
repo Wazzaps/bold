@@ -64,7 +64,7 @@ pub fn dump_hex<T>(val: &T) {
         if i % 4 == 3 {
             print!(" ");
         }
-        if i % 64 == 63 {
+        if i % 32 == 31 {
             print!("\n");
         }
     }

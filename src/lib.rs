@@ -26,6 +26,7 @@ pub(crate) mod ktask;
 mod lang_items;
 pub(crate) mod utils;
 
+use crate::console::dump_hex;
 pub(crate) use file_interface as fi;
 pub(crate) use utils::*;
 
@@ -133,7 +134,12 @@ pub unsafe extern "C" fn kmain() {
     //     }
     // });
 
-    arch::aarch64::sdhc::SDHC::init().unwrap();
+    let mut sdhc = arch::aarch64::sdhc::SDHC::init().unwrap();
+    let mut buf = [0; 512 / 4];
+    sdhc.read_block(0, &mut buf).unwrap();
+
+    println!("[INFO] EMMC: The data: ");
+    dump_hex(&buf);
 
     ktask::run();
 

@@ -18,9 +18,17 @@ Mix of:
     - [x] Async-ify `FileInterface`
     - [ ] Maybe Stream-ify `FileInterface`?
     - [ ] Proper executor
-- [ ] Read from SDHC card
+- [x] Read from SDHC card
+- [ ] Print kernel argv
+- [ ] Parse tar initrd
+- [ ] Run code in EL0 (usermode)
+- [ ] Paging for usermode
+- [ ] FAT32 driver
+- [ ] IPC layer
+- [ ] VFS layer?
+- [ ] Simple Bluetooth
 - [ ] Power management for RPI3
-- [ ] Dynamic virtual areas for kernel data
+- [ ] Dynamically sized virtual allocator for kernel data
 - [ ] Exception handling
 - [ ] USB
 - [ ] USB HID Keyboard
