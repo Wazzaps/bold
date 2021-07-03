@@ -19,7 +19,7 @@ Mix of:
     - [ ] Maybe Stream-ify `FileInterface`?
     - [ ] Proper executor
 - [x] Read from SDHC card
-- [ ] Print kernel argv
+- [x] Print kernel argv
 - [ ] Parse tar initrd
 - [ ] Run code in EL0 (usermode)
 - [ ] Paging for usermode
