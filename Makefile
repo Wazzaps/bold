@@ -71,11 +71,12 @@ clean:
 	$(XARGO) clean
 	rm -rf $(BUILD_DIR)
 
-run: $(KERNEL).bin
-	qemu-system-aarch64 -M raspi3 -serial stdio -semihosting -kernel $(KERNEL).bin -s
+build/disk.img:
+	fallocate $@ -l 64MiB
+	mkfs.vfat -F 32 -n 'BOLD SYSTEM' $@
 
-qemugdb-run: $(KERNEL).bin
-	gdb -ex=r --args qemu-system-aarch64 -M raspi3 -serial stdio -kernel $(KERNEL).bin
+run: $(KERNEL).bin build/disk.img
+	qemu-system-aarch64 -M raspi3 -serial stdio -semihosting -drive file=build/disk.img,if=sd,format=raw -kernel $(KERNEL).bin -s
 
 gdb:
 	/opt/compilers/gcc-arm-10.2-2020.11-x86_64-aarch64-none-elf/bin/aarch64-none-elf-gdb -ex 'target remote :1234' $(KERNEL).elf

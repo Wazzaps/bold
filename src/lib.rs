@@ -133,6 +133,8 @@ pub unsafe extern "C" fn kmain() {
     //     }
     // });
 
+    arch::aarch64::sdhc::SDHC::init().unwrap();
+
     ktask::run();
 
     qemu_exit::AArch64::new().exit(0);

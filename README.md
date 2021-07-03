@@ -18,6 +18,8 @@ Mix of:
     - [x] Async-ify `FileInterface`
     - [ ] Maybe Stream-ify `FileInterface`?
     - [ ] Proper executor
+- [ ] Read from SDHC card
+- [ ] Power management for RPI3
 - [ ] Dynamic virtual areas for kernel data
 - [ ] Exception handling
 - [ ] USB

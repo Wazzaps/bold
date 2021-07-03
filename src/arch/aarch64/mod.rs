@@ -5,5 +5,6 @@ pub(crate) mod mailbox_methods;
 pub(crate) mod mmio;
 pub(crate) mod phymem;
 pub(crate) mod qemu_uart;
+pub(crate) mod sdhc;
 pub(crate) mod uart;
 pub(crate) mod virtmem;

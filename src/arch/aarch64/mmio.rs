@@ -14,11 +14,33 @@ pub const MMIO_BASE: u32 = 0x3F000000;
 /// The offsets for reach register.
 pub const GPIO_BASE: u32 = MMIO_BASE + 0x200000;
 
+pub const GPFSEL0: u32 = GPIO_BASE + 0x00;
+pub const GPFSEL1: u32 = GPIO_BASE + 0x04;
+pub const GPFSEL2: u32 = GPIO_BASE + 0x08;
+pub const GPFSEL3: u32 = GPIO_BASE + 0x0c;
+pub const GPFSEL4: u32 = GPIO_BASE + 0x10;
+pub const GPFSEL5: u32 = GPIO_BASE + 0x14;
+
+pub const GPSET0: u32 = GPIO_BASE + 0x1c;
+pub const GPSET1: u32 = GPIO_BASE + 0x20;
+
+pub const GPCLR0: u32 = GPIO_BASE + 0x28;
+
+pub const GPLEV0: u32 = GPIO_BASE + 0x34;
+pub const GPLEV1: u32 = GPIO_BASE + 0x38;
+
+pub const GPEDS0: u32 = GPIO_BASE + 0x40;
+pub const GPEDS1: u32 = GPIO_BASE + 0x44;
+
+pub const GPHEN0: u32 = GPIO_BASE + 0x64;
+pub const GPHEN1: u32 = GPIO_BASE + 0x68;
+
 /// Controls actuation of pull up/down to ALL GPIO pins.
 pub const GPPUD: u32 = GPIO_BASE + 0x94;
 
 /// Controls actuation of pull up/down for specific GPIO pin.
 pub const GPPUDCLK0: u32 = GPIO_BASE + 0x98;
+pub const GPPUDCLK1: u32 = GPIO_BASE + 0x9C;
 
 /*
 for raspi4 0xFE201000, ras/pi2 & 3 0x3F201000, and 0x20201000 for raspi1
