@@ -103,9 +103,9 @@ unsafe fn _send_property_tag(
         if mailbox.rest[i] == ident {
             // Found response
             let mut tag_data = [0; 26];
-            tag_data[..tag_len as usize]
-                .copy_from_slice(&mailbox.rest[i + 3..i + 3 + (tag_len as usize)]);
-            let tag_data = TrimmedArray::new(tag_data, tag_len as usize);
+            tag_data[..(tag_len / 4) as usize]
+                .copy_from_slice(&mailbox.rest[i + 3..i + 3 + ((tag_len / 4) as usize)]);
+            let tag_data = TrimmedArray::new(tag_data, (tag_len / 4) as usize);
             println!(
                 "[DBUG] MB_RES: {:x}: {} bytes: {:?}",
                 tag_ident,
@@ -140,7 +140,17 @@ pub(crate) unsafe fn send_property_tag<REQ: Copy, RES: Copy>(
     Ok(*res)
 }
 
-struct TrimmedArray<T, const LEN: usize> {
+pub(crate) unsafe fn send_property_tag_raw<REQ: Copy>(
+    ident: u32,
+    req: REQ,
+    capacity: usize,
+) -> Result<TrimmedArray<u32, 26>, ()> {
+    let req = &*slice_from_raw_parts(&req as *const REQ as *const u32, size_of::<REQ>() / 4);
+    let res = _send_property_tag(ident, max(size_of::<REQ>() as u32, capacity as u32), req)?;
+    Ok(res)
+}
+
+pub struct TrimmedArray<T, const LEN: usize> {
     data: [T; LEN],
     len: usize,
 }

@@ -27,6 +27,7 @@ mod lang_items;
 pub(crate) mod utils;
 
 use crate::console::dump_hex;
+use core::ops::Deref;
 pub(crate) use file_interface as fi;
 pub(crate) use utils::*;
 
@@ -73,6 +74,10 @@ pub unsafe extern "C" fn kmain() {
         println!("[DBUG] Boxed val: {} (at &{:p})", heap_val, &heap_val);
         println!("[DBUG] Boxed val2: {} (at &{:p})", heap_val2, &heap_val2);
     }
+
+    // Get kernel command line
+    let args = mailbox_methods::get_kernel_args().unwrap();
+    println!("[INFO] Kernel command line: {:?}", args.deref());
 
     // Start kernel tasks
     ktask::init();

@@ -76,7 +76,7 @@ build/disk.img:
 	mkfs.vfat -F 32 -n 'BOLD SYSTEM' $@
 
 run: $(KERNEL).bin build/disk.img
-	qemu-system-aarch64 -M raspi3 -serial stdio -semihosting -drive file=build/disk.img,if=sd,format=raw -kernel $(KERNEL).bin -s
+	qemu-system-aarch64 -M raspi3 -serial stdio -semihosting -drive file=build/disk.img,if=sd,format=raw -kernel $(KERNEL).bin -append foo -s
 
 gdb:
 	/opt/compilers/gcc-arm-10.2-2020.11-x86_64-aarch64-none-elf/bin/aarch64-none-elf-gdb -ex 'target remote :1234' $(KERNEL).elf
