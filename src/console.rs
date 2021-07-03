@@ -71,6 +71,22 @@ pub fn dump_hex<T>(val: &T) {
     println!();
 }
 
+pub fn dump_hex_slice(val: &[u8]) {
+    let size = val.len();
+    for i in 0..size {
+        unsafe {
+            print!("{:02x}", val[i]);
+        }
+        if i % 4 == 3 {
+            print!(" ");
+        }
+        if i % 32 == 31 {
+            print!("\n");
+        }
+    }
+    println!();
+}
+
 pub struct Freq(pub u64);
 
 impl fmt::Display for Freq {

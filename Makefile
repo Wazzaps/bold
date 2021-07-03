@@ -75,8 +75,15 @@ build/disk.img:
 	fallocate $@ -l 64MiB
 	mkfs.vfat -F 32 -n 'BOLD SYSTEM' $@
 
-run: $(KERNEL).bin build/disk.img
-	qemu-system-aarch64 -M raspi3 -serial stdio -semihosting -drive file=build/disk.img,if=sd,format=raw -kernel $(KERNEL).bin -append foo -s
+build/initrd.tar:
+	rm -rf build/initrd $@
+	mkdir build/initrd
+	echo hello > build/initrd/hello
+	echo world > build/initrd/world
+	cd build/initrd && tar -cf ../initrd.tar *
+
+run: $(KERNEL).bin build/disk.img build/initrd.tar
+	qemu-system-aarch64 -M raspi3 -serial stdio -semihosting -drive file=build/disk.img,if=sd,format=raw -kernel $(KERNEL).bin -initrd build/initrd.tar -dtb bcm2710-rpi-3-b.dtb -append foo -s
 
 gdb:
 	/opt/compilers/gcc-arm-10.2-2020.11-x86_64-aarch64-none-elf/bin/aarch64-none-elf-gdb -ex 'target remote :1234' $(KERNEL).elf

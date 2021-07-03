@@ -26,8 +26,9 @@ pub(crate) mod ktask;
 mod lang_items;
 pub(crate) mod utils;
 
-use crate::console::dump_hex;
+use crate::console::{dump_hex, dump_hex_slice};
 use core::ops::Deref;
+use core::ptr::slice_from_raw_parts;
 pub(crate) use file_interface as fi;
 pub(crate) use utils::*;
 
@@ -45,7 +46,7 @@ where
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn kmain() {
+pub unsafe extern "C" fn kmain(dtb_addr: *const u8) {
     // Early console
     driver_manager::init_driver_by_name(b"QEMU-Only Raspberry Pi 3 UART0");
     console::set_main_console_by_name(b"QEMU-Only Raspberry Pi 3 UART0");
@@ -58,6 +59,10 @@ pub unsafe extern "C" fn kmain() {
     // con.read.unwrap()
     //     .read_exact(&mut buf).unwrap();
     // println!("{:?}", buf);
+
+    println!("[DBUG] DTB snippet:");
+    let something = &*slice_from_raw_parts(dtb_addr, 128);
+    dump_hex_slice(something);
 
     // Memory allocator
     phymem::PHYMEM_FREE_LIST.lock().init();
