@@ -1,6 +1,7 @@
 use crate::arch::aarch64::mailbox::send_property_tag;
+use crate::console::Freq;
 
-pub fn get_clock_rate(clock_id: u32) -> Result<u32, ()> {
+pub fn get_clock_rate(clock_id: u32) -> Result<Freq, ()> {
     #[repr(C)]
     #[derive(Copy, Clone)]
     pub struct GetClockRateReq {
@@ -17,10 +18,10 @@ pub fn get_clock_rate(clock_id: u32) -> Result<u32, ()> {
     let res: GetClockRateRes =
         unsafe { send_property_tag(0x00030002, GetClockRateReq { clock_id })? };
 
-    Ok(res.rate)
+    Ok(Freq(res.rate as u64))
 }
 
-pub fn set_clock_rate(clock_id: u32, rate: u32, skip_setting_turbo: bool) -> Result<u32, ()> {
+pub fn set_clock_rate(clock_id: u32, rate: u32, skip_setting_turbo: bool) -> Result<Freq, ()> {
     #[repr(C)]
     #[derive(Copy, Clone)]
     pub struct SetClockRateReq {
@@ -47,7 +48,7 @@ pub fn set_clock_rate(clock_id: u32, rate: u32, skip_setting_turbo: bool) -> Res
         )?
     };
 
-    Ok(res.rate)
+    Ok(Freq(res.rate as u64))
 }
 
 /// Returns uptime in microseconds

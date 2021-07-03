@@ -1,10 +1,15 @@
 use crate::driver_manager::{drivers, DeviceType};
-use crate::fi;
+use crate::file_interface::FileInterface;
+use crate::{fi, ktask};
+use alloc::prelude::v1::Box;
 use core::fmt;
+use core::fmt::Formatter;
+use core::future::Future;
 use core::mem::size_of;
+use core::task::Poll;
 use spin::RwLock;
 
-static MAIN_CONSOLE: RwLock<Option<&'static fi::FileInterface>> = RwLock::new(None);
+pub static MAIN_CONSOLE: RwLock<Option<&'static fi::FileInterface>> = RwLock::new(None);
 
 pub fn set_main_console_by_name(name: &[u8]) {
     for driver in drivers() {
@@ -31,13 +36,11 @@ macro_rules! println {
     ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
 }
 
-struct FmtWriteAdapter<'a>(&'a dyn fi::Write);
+struct FmtWriteAdapter<'a>(&'a (dyn fi::SyncWrite));
 
 impl fmt::Write for FmtWriteAdapter<'_> {
     fn write_str(&mut self, s: &str) -> fmt::Result {
-        // self.0.write_all(s.as_bytes()).map_err(|_| Err(fmt::Error))?;
-        self.0.write_all(s.as_bytes());
-        Ok(())
+        Ok(self.0.write_all(s.as_bytes()).map_err(|_| fmt::Error)?)
     }
 }
 
@@ -47,7 +50,7 @@ pub fn _print(args: fmt::Arguments) {
     use core::fmt::Write;
 
     if let Some(console) = MAIN_CONSOLE.read().as_deref() {
-        FmtWriteAdapter(console.write.unwrap()).write_fmt(args);
+        FmtWriteAdapter(console.sync_write.unwrap()).write_fmt(args);
     }
 }
 
@@ -66,4 +69,22 @@ pub fn dump_hex<T>(val: &T) {
         }
     }
     println!();
+}
+
+pub struct Freq(pub u64);
+
+impl fmt::Display for Freq {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        if self.0 < 1000 {
+            write!(f, "{}Hz", self.0)
+        } else if self.0 < 1000000 {
+            write!(f, "{}KHz", self.0 / 1000)
+        } else if self.0 < 1000000000 {
+            write!(f, "{}MHz", self.0 / 1000000)
+        } else if self.0 < 1000000000000 {
+            write!(f, "{}GHz", self.0 / 1000000)
+        } else {
+            write!(f, "{}THz", self.0 / 1000000000)
+        }
+    }
 }

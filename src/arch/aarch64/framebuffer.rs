@@ -3,6 +3,8 @@ use crate::driver_manager::{DeviceType, DriverInfo};
 use crate::file_interface::IoResult;
 use crate::framebuffer::FramebufferCM;
 use crate::{driver_manager, fi, println};
+use alloc::prelude::v1::Box;
+use async_trait::async_trait;
 use core::cell::UnsafeCell;
 use spin::RwLock;
 
@@ -73,7 +75,9 @@ static mut DRIVER: Driver = Driver {
         devices: RwLock::new([driver_manager::Device {
             device_type: DeviceType::Framebuffer,
             interface: fi::FileInterface {
+                sync_read: None,
                 read: None,
+                sync_write: None,
                 write: None,
                 ctrl: Some(&DEVICE),
             },
@@ -90,8 +94,9 @@ static mut DRIVER_REF: &dyn driver_manager::Driver = unsafe { &DRIVER };
 #[derive(Debug)]
 struct Device;
 
+#[async_trait]
 impl fi::Control for Device {
-    fn call(&self, msg: FramebufferCM) -> IoResult<()> {
+    async fn call(&self, msg: FramebufferCM) -> IoResult<()> {
         match msg {
             FramebufferCM::DrawExample { variant } => {
                 let fb_info = unsafe { (&FB_INFO as *const FramebufferInfo).read_volatile() };

@@ -5,7 +5,9 @@ use crate::arch::aarch64::mmio::{
 };
 use crate::driver_manager::{DeviceType, DriverInfo};
 use crate::file_interface::IoResult;
-use crate::{driver_manager, fi};
+use crate::{driver_manager, fi, ktask};
+use alloc::prelude::v1::Box;
+use async_trait::async_trait;
 use core::cell::UnsafeCell;
 use spin::RwLock;
 
@@ -101,7 +103,9 @@ static mut DRIVER: Driver = Driver {
         devices: RwLock::new([driver_manager::Device {
             device_type: DeviceType::Console,
             interface: fi::FileInterface {
-                read: None,
+                sync_read: Some(&DEVICE),
+                read: Some(&DEVICE),
+                sync_write: Some(&DEVICE),
                 write: Some(&DEVICE),
                 ctrl: None,
             },
@@ -118,7 +122,40 @@ static mut DRIVER_REF: &dyn driver_manager::Driver = unsafe { &DRIVER };
 #[derive(Debug)]
 struct Device;
 
+#[async_trait]
 impl fi::Write for Device {
+    async fn write(&self, buf: &[u8]) -> IoResult<usize> {
+        for c in buf {
+            unsafe {
+                // Wait for UART to become ready to transmit.
+                while mmio_read(UART0_FR) & (1 << 5) != 0 {
+                    ktask::yield_now().await;
+                }
+                mmio_write(UART0_DR, *c as u32);
+            }
+        }
+        Ok(buf.len())
+    }
+}
+
+#[async_trait]
+impl fi::Read for Device {
+    async fn read(&self, buf: &mut [u8]) -> IoResult<usize> {
+        if buf.len() == 0 {
+            return Ok(0);
+        }
+        unsafe {
+            // Wait for UART to become ready to receive.
+            while mmio_read(UART0_FR) & (1 << 4) != 0 {
+                ktask::yield_now().await;
+            }
+            buf[0] = mmio_read(UART0_DR) as u8;
+        }
+        Ok(1)
+    }
+}
+
+impl fi::SyncWrite for Device {
     fn write(&self, buf: &[u8]) -> IoResult<usize> {
         for c in buf {
             unsafe {
@@ -128,6 +165,20 @@ impl fi::Write for Device {
             }
         }
         Ok(buf.len())
+    }
+}
+
+impl fi::SyncRead for Device {
+    fn read(&self, buf: &mut [u8]) -> IoResult<usize> {
+        if buf.len() == 0 {
+            return Ok(0);
+        }
+        unsafe {
+            // Wait for UART to become ready to receive.
+            while mmio_read(UART0_FR) & (1 << 4) != 0 {}
+            buf[0] = mmio_read(UART0_DR) as u8;
+        }
+        Ok(1)
     }
 }
 

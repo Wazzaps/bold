@@ -1,3 +1,5 @@
+use crate::ktask;
+
 /// board type, raspi3
 pub const RASPI: u32 = 3;
 
@@ -90,7 +92,7 @@ pub fn get_system_timer() -> u64 {
     }
 }
 
-pub fn delay_us(time: u64) {
+pub fn delay_us_sync(time: u64) {
     unsafe {
         let mut freq: u64 = 0;
         let mut counter: u64 = 0;
@@ -112,6 +114,33 @@ pub fn delay_us(time: u64) {
             if counter >= expires_at {
                 break;
             }
+        }
+    }
+}
+
+pub async fn delay_us(time: u64) {
+    unsafe {
+        let mut freq: u64 = 0;
+        let mut counter: u64 = 0;
+        asm!(
+        "mrs {freq}, cntfrq_el0",
+        "mrs {counter}, cntpct_el0",
+        freq = out(reg) freq,
+        counter = out(reg) counter,
+        options(nomem, nostack)
+        );
+
+        let expires_at = counter + ((freq / 1000) * time) / 1000;
+        loop {
+            asm!(
+            "mrs {counter}, cntpct_el0",
+            counter = out(reg) counter,
+            options(nomem, nostack)
+            );
+            if counter >= expires_at {
+                break;
+            }
+            ktask::yield_now().await;
         }
     }
 }

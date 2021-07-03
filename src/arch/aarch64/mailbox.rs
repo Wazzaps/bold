@@ -1,5 +1,5 @@
 use crate::arch::aarch64::mmio::{
-    delay_us, mmio_read, mmio_write, MBOX_READ, MBOX_STATUS, MBOX_WRITE,
+    delay_us_sync, mmio_read, mmio_write, MBOX_READ, MBOX_STATUS, MBOX_WRITE,
 };
 use crate::println;
 use core::cmp::{max, min};
@@ -46,7 +46,7 @@ pub unsafe fn read_raw() -> u32 {
             response = true;
             break;
         } else {
-            delay_us(100);
+            delay_us_sync(100);
         }
     }
     if !response {
