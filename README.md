@@ -62,7 +62,7 @@ Mix of:
 - [x] Print kernel argv
 - [x] Switch to EL1 from EL2
 - [x] Enable paging for EL1
-- [ ] CI with Docker + GH actions
+- [x] CI with Docker + GH actions
 - [ ] Exception handling
 - [ ] Parse tar initrd
 - [ ] Run code in EL0 (usermode)

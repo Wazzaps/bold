@@ -1,0 +1,38 @@
+name: Build BoldOS
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch:
+
+jobs:
+  Build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
+      - name: Cache Cargo packages
+        uses: actions/cache@v2
+        with:
+          path: |
+            /tmp/cargo-registry-cache
+            /tmp/build-cache
+            /tmp/xargo-cache
+      - name: Create builder image
+        run: docker build -t boldos-build ${{github.workspace}}
+      - name: Build
+        run: docker run --rm -it -w /wd -v ${{github.workspace}}:/wd -v /tmp/cargo-registry-cache:/root/.cargo/registry -v /tmp/xargo-cache:/root/.xargo -v /tmp/build-cache:/wd/target boldos-build 'bash' '-c' '. $HOME/.cargo/env && xargo build --release'
+      - name: Clippy
+        run: docker run --rm -it -w /wd -v ${{github.workspace}}:/wd -v /tmp/cargo-registry-cache:/root/.cargo/registry -v /tmp/xargo-cache:/root/.xargo -v /tmp/build-cache:/wd/target boldos-build 'bash' '-c' '. $HOME/.cargo/env && cargo clippy --release'
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: build-aarch64
+          path: |
+            ${{github.workspace}}/target/aarch64-none-elf/release/boldos
+            ${{github.workspace}}/target/aarch64-none-elf/release/boldos.bin
+            ${{github.workspace}}/target/aarch64-none-elf/release/initrd.tar
+            ${{github.workspace}}/target/aarch64-none-elf/release/disk.img
