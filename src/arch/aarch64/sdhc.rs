@@ -44,6 +44,8 @@ pub const CMD_SEND_IF_COND: u32 = 0x08020000;
 pub const CMD_STOP_TRANS: u32 = 0x0C030000;
 pub const CMD_READ_SINGLE: u32 = 0x11220010;
 pub const CMD_READ_MULTI: u32 = 0x12220032;
+pub const CMD_WRITE_SINGLE: u32 = 0x18220000;
+pub const CMD_WRITE_MULTI: u32 = 0x19220022;
 pub const CMD_SET_BLOCKCNT: u32 = 0x17020000;
 pub const CMD_APP_CMD: u32 = 0x37000000;
 pub const CMD_SET_BUS_WIDTH: u32 = (0x06020000 | CMD_NEED_APP);
@@ -52,6 +54,7 @@ pub const CMD_SEND_SCR: u32 = (0x33220010 | CMD_NEED_APP);
 
 // STATUS register settings
 pub const SR_READ_AVAILABLE: u32 = 0x00000800;
+pub const SR_WRITE_AVAILABLE: u32 = 0x00000400;
 pub const SR_DAT_INHIBIT: u32 = 0x00000002;
 pub const SR_CMD_INHIBIT: u32 = 0x00000001;
 pub const SR_APP_CMD: u32 = 0x00000020;
@@ -60,6 +63,8 @@ pub const SR_APP_CMD: u32 = 0x00000020;
 pub const INT_DATA_TIMEOUT: u32 = 0x00100000;
 pub const INT_CMD_TIMEOUT: u32 = 0x00010000;
 pub const INT_READ_RDY: u32 = 0x00000020;
+pub const INT_WRITE_RDY: u32 = 0x00000010;
+pub const INT_DATA_DONE: u32 = 0x00000002;
 pub const INT_CMD_DONE: u32 = 0x00000001;
 
 pub const INT_ERROR_MASK: u32 = 0x017E8000;
@@ -427,6 +432,57 @@ impl SDHC {
             }
             buf = &mut buf[(512 / 4)..];
         }
+
+        if block_count > 1 && set_blkcnt_support && ccs_support {
+            self.cmd(CMD_STOP_TRANS, 0)?;
+        }
+
+        Ok(())
+    }
+
+    /// write blocks from the sd card
+    pub unsafe fn write_block(&mut self, lba: u32, mut buf: &[u32]) -> Result<(), ()> {
+        if buf.len() % (512 / 4) != 0 || buf.len() == 0 {
+            return Err(());
+        }
+        let block_count = (buf.len() / (512 / 4)) as u32;
+        println!(
+            "[DBUG] EMMC: write_block(lba: {}, blocks: {})",
+            lba, block_count
+        );
+
+        let ccs_support = (self.sd_scr[0] & SCR_SUPP_CCS) != 0;
+        let set_blkcnt_support = (self.sd_scr[0] & SCR_SUPP_SET_BLKCNT) != 0;
+
+        self.status(SR_DAT_INHIBIT | SR_WRITE_AVAILABLE)?;
+        if ccs_support {
+            if block_count > 1 && set_blkcnt_support {
+                self.cmd(CMD_SET_BLOCKCNT, block_count)?;
+            }
+            mmio_write(EMMC_BLKSIZECNT, (block_count << 16) | 512);
+            self.cmd(
+                if block_count == 1 {
+                    CMD_WRITE_SINGLE
+                } else {
+                    CMD_WRITE_MULTI
+                },
+                lba,
+            )?;
+        } else {
+            mmio_write(EMMC_BLKSIZECNT, (1 << 16) | 512);
+        }
+
+        for block in 0..block_count {
+            if !ccs_support {
+                self.cmd(CMD_WRITE_SINGLE, (lba + block) * 512)?;
+            }
+            self.int(INT_WRITE_RDY)?;
+            for chunk in 0..128 {
+                mmio_write(EMMC_DATA, buf[chunk]);
+            }
+            buf = &buf[(512 / 4)..];
+        }
+        self.int(INT_DATA_DONE)?;
 
         if block_count > 1 && set_blkcnt_support && ccs_support {
             self.cmd(CMD_STOP_TRANS, 0)?;

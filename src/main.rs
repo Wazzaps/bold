@@ -160,6 +160,12 @@ pub unsafe extern "C" fn kmain(dtb_addr: *const u8) {
     println!("[INFO] EMMC: First block: ");
     dump_hex(&buf);
 
+    // Modify first dword to demonstrate writing
+    buf[0] = 0xdeadbeef;
+    sdhc.write_block(0, &mut buf).unwrap();
+    sdhc.read_block(0, &mut buf).unwrap();
+    assert_eq!(buf[0], 0xdeadbeef);
+
     ktask::run();
 
     qemu_exit::AArch64::new().exit(0);
