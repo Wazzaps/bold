@@ -17,7 +17,7 @@ jobs:
       - name: Cache Cargo packages
         uses: actions/cache@v2
         with:
-          key: caches
+          key: boldos-caches
           path: |
             /tmp/cargo-registry-cache
             /tmp/build-cache
@@ -40,3 +40,4 @@ jobs:
             /tmp/build-cache/aarch64-none-elf/release/boldos.bin
             /tmp/build-cache/aarch64-none-elf/release/initrd.tar
             /tmp/build-cache/aarch64-none-elf/release/disk.img
+          if-no-files-found: error
