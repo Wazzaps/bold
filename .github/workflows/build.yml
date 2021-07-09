@@ -17,6 +17,7 @@ jobs:
       - name: Cache Cargo packages
         uses: actions/cache@v2
         with:
+          key: caches
           path: |
             /tmp/cargo-registry-cache
             /tmp/build-cache
