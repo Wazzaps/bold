@@ -5,9 +5,11 @@
 #![feature(async_closure)]
 #![no_builtins]
 #![no_std]
+#![no_main]
 #![allow(warnings)]
 #![warn(unused_imports)]
 #![warn(unused_import_braces)]
+#![feature(naked_functions)]
 
 extern crate alloc;
 
@@ -28,7 +30,7 @@ pub(crate) mod utils;
 
 use crate::console::{dump_hex, dump_hex_slice};
 use core::ops::Deref;
-use core::ptr::slice_from_raw_parts;
+use core::ptr::{null, slice_from_raw_parts};
 pub(crate) use file_interface as fi;
 pub(crate) use utils::*;
 
@@ -63,9 +65,13 @@ pub unsafe extern "C" fn kmain(dtb_addr: *const u8) {
     //     .read_exact(&mut buf).unwrap();
     // println!("{:?}", buf);
 
-    println!("[DBUG] DTB snippet:");
-    let something = &*slice_from_raw_parts(dtb_addr, 128);
-    dump_hex_slice(something);
+    if dtb_addr != null() {
+        println!("[DBUG] DTB snippet:");
+        let something = &*slice_from_raw_parts(dtb_addr, 128);
+        dump_hex_slice(something);
+    } else {
+        println!("[DBUG] No DTB given");
+    }
 
     // Memory allocator
     phymem::PHYMEM_FREE_LIST.lock().init();
@@ -151,7 +157,7 @@ pub unsafe extern "C" fn kmain(dtb_addr: *const u8) {
     let mut buf = [0; 512 / 4];
     sdhc.read_block(0, &mut buf).unwrap();
 
-    println!("[INFO] EMMC: The data: ");
+    println!("[INFO] EMMC: First block: ");
     dump_hex(&buf);
 
     ktask::run();

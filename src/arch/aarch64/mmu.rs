@@ -1,5 +1,5 @@
 use crate::arch::aarch64::mmio;
-use crate::println;
+use crate::{get_msr, println, set_msr};
 use core::sync::atomic::{compiler_fence, fence, Ordering};
 
 const PAGE_SIZE: u64 = 4096;
@@ -54,28 +54,6 @@ impl PageTables {
 
 extern "C" {
     static mut __data_start: u8;
-}
-
-macro_rules! set_msr {
-    ($name: ident, $value: expr) => {
-        asm!(
-            concat!("msr ", stringify!($name), ", {}"),
-            in(reg) $value,
-            options(nomem, nostack)
-        );
-    };
-}
-
-macro_rules! get_msr {
-    ($name: ident) => {{
-        let val: u64;
-        asm!(
-            concat!("mrs {}, ", stringify!($name)),
-            out(reg) val,
-            options(nomem, nostack)
-        );
-        val
-    }};
 }
 
 pub unsafe fn init() -> Result<(), ()> {
