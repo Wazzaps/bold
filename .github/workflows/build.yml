@@ -29,12 +29,14 @@ jobs:
       - name: Clippy
         run: docker run --rm -w /wd -v ${{github.workspace}}:/wd -v /tmp/cargo-registry-cache:/root/.cargo/registry -v /tmp/xargo-cache:/root/.xargo -v /tmp/build-cache:/wd/target boldos-build 'bash' '-c' '. $HOME/.cargo/env && cargo clippy --release'
         continue-on-error: true
+      - name: Fix cache permissions
+        run: sudo chmod -R a+rwx /tmp/cargo-registry-cache /tmp/build-cache /tmp/xargo-cache
       - name: Upload artifacts
         uses: actions/upload-artifact@v2
         with:
           name: build-aarch64
           path: |
-            ${{github.workspace}}/target/aarch64-none-elf/release/boldos
-            ${{github.workspace}}/target/aarch64-none-elf/release/boldos.bin
-            ${{github.workspace}}/target/aarch64-none-elf/release/initrd.tar
-            ${{github.workspace}}/target/aarch64-none-elf/release/disk.img
+            /tmp/build-cache/aarch64-none-elf/release/boldos
+            /tmp/build-cache/aarch64-none-elf/release/boldos.bin
+            /tmp/build-cache/aarch64-none-elf/release/initrd.tar
+            /tmp/build-cache/aarch64-none-elf/release/disk.img
