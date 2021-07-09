@@ -1,0 +1,18 @@
+name: Build BoldOS builder image
+on:
+  workflow_dispatch:
+
+jobs:
+  Build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
+      - name: Log in to Docker Hub
+        run: docker login -u "${{ secrets.DOCKER_USERNAME }}" -p "${{ secrets.DOCKER_PASSWORD }}"
+      - name: Create builder image
+        run: docker build -t wazzaps/boldos-build ${{github.workspace}}
+      - name: Push builder image
+        run: docker push wazzaps/boldos-build
