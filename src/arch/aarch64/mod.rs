@@ -1,4 +1,5 @@
 pub(crate) mod entropy;
+pub(crate) mod exceptions;
 pub(crate) mod framebuffer;
 mod init;
 pub(crate) mod mailbox;
