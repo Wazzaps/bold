@@ -23,13 +23,10 @@ lto = true
 debug = true
 
 [dependencies]
-rlibc = "*"
 linked_list_allocator = "0.9"
 spin = "0.5"
-lazy_static = { version = "1.4", features = ["spin_no_std"] }
 qemu-exit = "2.0.0"
 async-trait = "0.1.50"
-futures = { version = "0.3", default-features = false, features = ["alloc"] }
 #arrayvec = { version = "0.7.1", default-features = false }
 #serde = { version = "1.0", default-features = false, features = ["derive"] }
 #bincode-no-std = "1.0.0"

@@ -9,6 +9,9 @@ SECTIONS {
       *(.text .text.* .gnu.linkonce.t*)
   }
 
+  . = ALIGN(4096);
+  __data_start = .;
+
   .rodata : {
     *(.rodata .rodata.* .gnu.linkonce.r*)
     . = ALIGN(8);

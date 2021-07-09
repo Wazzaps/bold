@@ -26,7 +26,7 @@ VPATH = src/arch/aarch64/build
 all: $(KERNEL).hex $(KERNEL).bin
 
 check:
-	@$(XARGO) check --target=$(TARGET)
+	@$(XARGO) check --target=$(TARGET) --release
 
 $(RUST_DEBUG_LIB): $(RUST_DEPS)
 	@echo "+ Building $@ [xargo]"
@@ -58,6 +58,7 @@ $(BUILD_DIR)/%.o: %.S | $(BUILD_DIR)
 $(KERNEL).elf: $(EXT_DEPS) $(RUST_LIB) | $(BUILD_DIR)
 	@echo "+ Building $@ [ld $^]"
 	@$(CROSS)-ld --gc-sections -o $@ $^ -T$(LD_SCRIPT)
+	@objdump -d $@ | grep "q0," > /dev/null && rm $@ && exit 1
 
 $(KERNEL).hex: $(KERNEL).elf | $(BUILD_DIR)
 	@echo "+ Building $@ [objcopy $<]"
@@ -83,7 +84,10 @@ build/initrd.tar:
 	cd build/initrd && tar -cf ../initrd.tar *
 
 run: $(KERNEL).bin build/disk.img build/initrd.tar
-	qemu-system-aarch64 -M raspi3 -serial stdio -semihosting -drive file=build/disk.img,if=sd,format=raw -kernel $(KERNEL).bin -initrd build/initrd.tar -dtb bcm2710-rpi-3-b.dtb -append foo -s
+	qemu-system-aarch64 -M raspi3 -serial stdio -semihosting -drive file=build/disk.img,if=sd,format=raw -kernel $(KERNEL).bin -initrd build/initrd.tar -dtb bcm2710-rpi-3-b.dtb -append foo -s -d int,unimp,guest_errors,mmu 2>&1
+
+run-stopped: $(KERNEL).bin build/disk.img build/initrd.tar
+	qemu-system-aarch64 -M raspi3 -serial stdio -semihosting -drive file=build/disk.img,if=sd,format=raw -kernel $(KERNEL).bin -initrd build/initrd.tar -dtb bcm2710-rpi-3-b.dtb -append foo -s -S -d int,unimp,guest_errors,mmu
 
 gdb:
 	/opt/compilers/gcc-arm-10.2-2020.11-x86_64-aarch64-none-elf/bin/aarch64-none-elf-gdb -ex 'target remote :1234' $(KERNEL).elf
