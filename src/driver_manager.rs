@@ -53,7 +53,7 @@ impl DriverInfo {
                 return Some(interface);
             }
         }
-        return None;
+        None
     }
 }
 
@@ -83,11 +83,9 @@ pub fn drivers() -> &'static [&'static dyn Driver] {
 }
 
 pub unsafe fn drivers_mut() -> &'static mut [&'static mut dyn Driver] {
-    unsafe {
-        let start = &mut __drivers_start as *mut u8 as *mut &mut dyn Driver;
-        let end = &mut __drivers_end as *mut u8 as *mut &mut dyn Driver;
-        &mut *slice_from_raw_parts_mut(start, end.offset_from(start) as usize)
-    }
+    let start = &mut __drivers_start as *mut u8 as *mut &mut dyn Driver;
+    let end = &mut __drivers_end as *mut u8 as *mut &mut dyn Driver;
+    &mut *slice_from_raw_parts_mut(start, end.offset_from(start) as usize)
 }
 
 fn init_driver(driver: &'static dyn Driver) -> Result<(), ()> {
@@ -97,7 +95,6 @@ fn init_driver(driver: &'static dyn Driver) -> Result<(), ()> {
 }
 
 pub fn init_driver_by_name(name: &[u8]) -> Result<(), ()> {
-    // for driver in unsafe { drivers_mut() } {
     for driver in drivers() {
         let info = driver.info();
         if !info.initialized && info.name == name {
@@ -109,12 +106,13 @@ pub fn init_driver_by_name(name: &[u8]) -> Result<(), ()> {
 
 pub fn init_all_drivers() {
     for driver in unsafe { drivers_mut() } {
-        if !driver.info().initialized {
-            init_driver(*driver);
+        if !driver.info().initialized && init_driver(*driver).is_err() {
+            println!("[EROR] Failed to initialize driver: \"{:?}\"", driver);
         }
     }
 }
 
+#[allow(dead_code)]
 pub fn device_by_type(device_type: DeviceType) -> Option<&'static fi::FileInterface> {
     for driver in drivers() {
         if driver.info().initialized {
@@ -123,5 +121,5 @@ pub fn device_by_type(device_type: DeviceType) -> Option<&'static fi::FileInterf
             }
         }
     }
-    return None;
+    None
 }

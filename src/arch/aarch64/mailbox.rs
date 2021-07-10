@@ -52,7 +52,7 @@ pub unsafe fn read_raw() -> u32 {
     if !response {
         panic!("No response from mailbox");
     }
-    return mmio_read(MBOX_READ);
+    mmio_read(MBOX_READ)
 }
 
 pub unsafe fn call_raw(dst: *mut u8) {

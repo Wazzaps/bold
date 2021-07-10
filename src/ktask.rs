@@ -1,6 +1,6 @@
-use crate::println;
 use alloc::boxed::Box;
 use alloc::collections::VecDeque;
+use core::ptr::null;
 use core::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 use core::{future::Future, pin::Pin};
 use spin::Mutex;
@@ -12,6 +12,7 @@ pub struct Task {
 }
 
 impl Task {
+    #[allow(dead_code)]
     pub fn new(future: impl Future<Output = ()> + Send + 'static) -> Task {
         Task {
             future: Box::pin(future),
@@ -53,6 +54,7 @@ impl SimpleExecutor {
         }
     }
 
+    #[allow(dead_code)]
     pub fn run_blocking(task: Task) {
         let mut executor = SimpleExecutor::new();
         executor.spawn(task);
@@ -67,7 +69,7 @@ fn dummy_raw_waker() -> RawWaker {
     }
 
     let vtable = &RawWakerVTable::new(clone, no_op, no_op, no_op);
-    RawWaker::new(0 as *const (), vtable)
+    RawWaker::new(null(), vtable)
 }
 
 fn dummy_waker() -> Waker {
@@ -111,8 +113,7 @@ macro_rules! spawn_task {
     ($b:block) => {{
         let mut executor = crate::ktask::EXECUTOR.lock();
         let executor = executor.as_mut().unwrap();
-        executor.spawn(crate::ktask::Task::new_raw(
-            Box::pin((async move || ($b))()),
-        ));
+        let closure = async move || ($b);
+        executor.spawn(crate::ktask::Task::new_raw(Box::pin(closure())));
     }};
 }

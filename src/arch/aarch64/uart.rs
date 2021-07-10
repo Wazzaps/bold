@@ -47,16 +47,8 @@ impl driver_manager::Driver for Driver {
             // For Raspi3 and 4 the UART_CLOCK is system-clock dependent by default.
             // Set it to 3Mhz so that we can consistently set the baud rate
             if RASPI >= 3 {
-                #[repr(align(16), C)]
-                struct MBoxMsg([u32; 9]);
-
-                // UART_CLOCK = 30000000
                 // A Mailbox message with set clock rate of PL011 to 3MHz tag
-                // println!("Previous clock: {}", mailbox::get_clock_rate(2).unwrap());
                 mailbox_methods::set_clock_rate(2, 3000000, false).unwrap();
-                // println!("New clock: {}", mailbox::get_clock_rate(2).unwrap());
-                // let mut mbox = MBoxMsg([9 * 4, 0, 0x38002, 12, 8, 2, 3000000, 0, 0]);
-                // mailbox::write_raw(((&mut mbox as *mut MBoxMsg as *mut u8 as usize as u32) & !0xF) | 8);
             }
 
             // Divider = 3000000 / (16 * 115200) = 1.627 = ~1.
@@ -141,7 +133,7 @@ impl fi::Write for Device {
 #[async_trait]
 impl fi::Read for Device {
     async fn read(&self, buf: &mut [u8]) -> IoResult<usize> {
-        if buf.len() == 0 {
+        if buf.is_empty() {
             return Ok(0);
         }
         unsafe {
@@ -170,7 +162,7 @@ impl fi::SyncWrite for Device {
 
 impl fi::SyncRead for Device {
     fn read(&self, buf: &mut [u8]) -> IoResult<usize> {
-        if buf.len() == 0 {
+        if buf.is_empty() {
             return Ok(0);
         }
         unsafe {

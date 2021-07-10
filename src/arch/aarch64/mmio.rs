@@ -1,3 +1,6 @@
+#![allow(dead_code)]
+#![allow(clippy::identity_op)]
+
 use crate::ktask;
 
 /// board type, raspi3
@@ -48,7 +51,7 @@ for raspi4 0xFE201000, ras/pi2 & 3 0x3F201000, and 0x20201000 for raspi1
 /// The base address for UART.
 pub const UART0_BASE: u32 = GPIO_BASE + 0x1000;
 
-/// The offsets for reach register for the UART.
+/// The offsets for each register for the UART0.
 pub const UART0_DR: u32 = UART0_BASE + 0x00;
 pub const UART0_RSRECR: u32 = UART0_BASE + 0x04;
 pub const UART0_FR: u32 = UART0_BASE + 0x18;
@@ -67,6 +70,20 @@ pub const UART0_ITCR: u32 = UART0_BASE + 0x80;
 pub const UART0_ITIP: u32 = UART0_BASE + 0x84;
 pub const UART0_ITOP: u32 = UART0_BASE + 0x88;
 pub const UART0_TDR: u32 = UART0_BASE + 0x8C;
+
+// The offsets for each register for the UART1.
+pub const UART1_ENABLE: u32 = MMIO_BASE + 0x00215004;
+pub const UART1_MU_IO: u32 = MMIO_BASE + 0x00215040;
+pub const UART1_MU_IER: u32 = MMIO_BASE + 0x00215044;
+pub const UART1_MU_IIR: u32 = MMIO_BASE + 0x00215048;
+pub const UART1_MU_LCR: u32 = MMIO_BASE + 0x0021504C;
+pub const UART1_MU_MCR: u32 = MMIO_BASE + 0x00215050;
+pub const UART1_MU_LSR: u32 = MMIO_BASE + 0x00215054;
+pub const UART1_MU_MSR: u32 = MMIO_BASE + 0x00215058;
+pub const UART1_MU_SCRATCH: u32 = MMIO_BASE + 0x0021505C;
+pub const UART1_MU_CNTL: u32 = MMIO_BASE + 0x00215060;
+pub const UART1_MU_STAT: u32 = MMIO_BASE + 0x00215064;
+pub const UART1_MU_BAUD: u32 = MMIO_BASE + 0x00215068;
 
 /// The offsets for Mailbox registers
 pub const MBOX_BASE: u32 = MMIO_BASE + 0xB880;
@@ -116,8 +133,8 @@ pub fn get_system_timer() -> u64 {
 
 pub fn delay_us_sync(time: u64) {
     unsafe {
-        let mut freq: u64 = 0;
-        let mut counter: u64 = 0;
+        let mut freq: u64;
+        let mut counter: u64;
         asm!(
             "mrs {freq}, cntfrq_el0",
             "mrs {counter}, cntpct_el0",
@@ -142,8 +159,8 @@ pub fn delay_us_sync(time: u64) {
 
 pub async fn delay_us(time: u64) {
     unsafe {
-        let mut freq: u64 = 0;
-        let mut counter: u64 = 0;
+        let mut freq: u64;
+        let mut counter: u64;
         asm!(
         "mrs {freq}, cntfrq_el0",
         "mrs {counter}, cntpct_el0",
@@ -169,8 +186,8 @@ pub async fn delay_us(time: u64) {
 
 pub fn get_uptime_us() -> u64 {
     unsafe {
-        let mut freq: u64 = 0;
-        let mut counter: u64 = 0;
+        let mut freq: u64;
+        let mut counter: u64;
         asm!(
             "mrs {freq}, cntfrq_el0",
             "mrs {counter}, cntpct_el0",

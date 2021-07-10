@@ -6,14 +6,11 @@
 #![no_builtins]
 #![no_std]
 #![no_main]
-#![allow(warnings)]
-#![warn(unused_imports)]
-#![warn(unused_import_braces)]
 #![feature(naked_functions)]
 
 extern crate alloc;
 
-use crate::arch::aarch64::mmio::{delay_us, delay_us_sync, get_uptime_us};
+use crate::arch::aarch64::mmio::{delay_us, get_uptime_us};
 use crate::arch::aarch64::{mailbox_methods, mmu, phymem, virtmem};
 use crate::driver_manager::DeviceType;
 use alloc::boxed::Box;
@@ -29,8 +26,9 @@ mod lang_items;
 pub(crate) mod utils;
 
 use crate::console::{dump_hex, dump_hex_slice};
+use crate::ErrWarn;
 use core::ops::Deref;
-use core::ptr::{null, slice_from_raw_parts};
+use core::ptr::slice_from_raw_parts;
 pub(crate) use file_interface as fi;
 pub(crate) use utils::*;
 
@@ -47,10 +45,23 @@ where
     }
 }
 
+#[inline(always)]
+unsafe fn syscall1(num: usize, mut arg1: usize) -> usize {
+    asm!(
+        "svc #0",
+        in("x8") num,
+        inout("x0") arg1,
+    );
+    arg1
+}
+
+/// # Safety
+///
+/// This function assumes it runs only once, on a clean machine
 #[no_mangle]
 pub unsafe extern "C" fn kmain(dtb_addr: *const u8) {
     // Early console
-    driver_manager::init_driver_by_name(b"QEMU-Only Raspberry Pi 3 UART0");
+    driver_manager::init_driver_by_name(b"QEMU-Only Raspberry Pi 3 UART0").warn();
     console::set_main_console_by_name(b"QEMU-Only Raspberry Pi 3 UART0");
     println!("--- Bold Kernel v{} ---", env!("CARGO_PKG_VERSION"));
     println!("[INFO] Early console working");
@@ -65,7 +76,7 @@ pub unsafe extern "C" fn kmain(dtb_addr: *const u8) {
     //     .read_exact(&mut buf).unwrap();
     // println!("{:?}", buf);
 
-    if dtb_addr != null() {
+    if !dtb_addr.is_null() {
         println!("[DBUG] DTB snippet:");
         let something = &*slice_from_raw_parts(dtb_addr, 128);
         dump_hex_slice(something);
@@ -99,7 +110,7 @@ pub unsafe extern "C" fn kmain(dtb_addr: *const u8) {
     println!("[INFO] Loaded drivers: {:?}", driver_manager::drivers());
 
     println!("[INFO] Initializing main console");
-    driver_manager::init_driver_by_name(b"Raspberry Pi 3 UART0");
+    driver_manager::init_driver_by_name(b"Raspberry Pi 3 UART0").warn();
     console::set_main_console_by_name(b"Raspberry Pi 3 UART0");
     println!("[INFO] Main console working");
 
@@ -117,7 +128,7 @@ pub unsafe extern "C" fn kmain(dtb_addr: *const u8) {
     // Draw something
     spawn_task!({
         println!("[INFO] Drawing something");
-        let mut framebuffer = driver_manager::device_by_type(DeviceType::Framebuffer)
+        let framebuffer = driver_manager::device_by_type(DeviceType::Framebuffer)
             .unwrap()
             .ctrl
             .unwrap();
@@ -125,7 +136,8 @@ pub unsafe extern "C" fn kmain(dtb_addr: *const u8) {
             vsync(async || {
                 framebuffer
                     .call(framebuffer::FramebufferCM::DrawExample { variant: i })
-                    .await;
+                    .await
+                    .warn();
             })
             .await;
         }
@@ -153,6 +165,9 @@ pub unsafe extern "C" fn kmain(dtb_addr: *const u8) {
     //     }
     // });
 
+    // Call syscall (not yet implemented)
+    // println!("result = 0x{:x}", syscall1(123, 321));
+
     let mut sdhc = arch::aarch64::sdhc::SDHC::init().unwrap();
     let mut buf = [0; 512 / 4];
     sdhc.read_block(0, &mut buf).unwrap();
@@ -162,7 +177,7 @@ pub unsafe extern "C" fn kmain(dtb_addr: *const u8) {
 
     // Modify first dword to demonstrate writing
     buf[0] = 0xdeadbeef;
-    sdhc.write_block(0, &mut buf).unwrap();
+    sdhc.write_block(0, &buf).unwrap();
     sdhc.read_block(0, &mut buf).unwrap();
     assert_eq!(buf[0], 0xdeadbeef);
 

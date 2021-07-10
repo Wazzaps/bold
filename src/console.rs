@@ -1,12 +1,8 @@
 use crate::driver_manager::{drivers, DeviceType};
-use crate::file_interface::FileInterface;
-use crate::{fi, ktask};
-use alloc::prelude::v1::Box;
+use crate::fi;
 use core::fmt;
 use core::fmt::Formatter;
-use core::future::Future;
 use core::mem::size_of;
-use core::task::Poll;
 use spin::RwLock;
 
 pub static MAIN_CONSOLE: RwLock<Option<&'static fi::FileInterface>> = RwLock::new(None);
@@ -40,7 +36,7 @@ struct FmtWriteAdapter<'a>(&'a (dyn fi::SyncWrite));
 
 impl fmt::Write for FmtWriteAdapter<'_> {
     fn write_str(&mut self, s: &str) -> fmt::Result {
-        Ok(self.0.write_all(s.as_bytes()).map_err(|_| fmt::Error)?)
+        self.0.write_all(s.as_bytes()).map_err(|_| fmt::Error)
     }
 }
 
@@ -50,38 +46,37 @@ pub fn _print(args: fmt::Arguments) {
     use core::fmt::Write;
 
     if let Some(console) = MAIN_CONSOLE.read().as_deref() {
-        FmtWriteAdapter(console.sync_write.unwrap()).write_fmt(args);
+        // Ignore return code
+        let _ = FmtWriteAdapter(console.sync_write.unwrap()).write_fmt(args);
     }
 }
 
 pub fn dump_hex<T>(val: &T) {
-    let size = size_of::<T>();
+    let size = size_of::<T>() as isize;
     let val = val as *const T as *const u8;
     for i in 0..size {
         unsafe {
-            print!("{:02x}", *val.offset(i as isize));
+            print!("{:02x}", *val.offset(i));
         }
         if i % 4 == 3 {
             print!(" ");
         }
         if i % 32 == 31 {
-            print!("\n");
+            println!();
         }
     }
     println!();
 }
 
+#[allow(dead_code)]
 pub fn dump_hex_slice(val: &[u8]) {
-    let size = val.len();
-    for i in 0..size {
-        unsafe {
-            print!("{:02x}", val[i]);
-        }
+    for (i, byte) in val.iter().enumerate() {
+        print!("{:02x}", byte);
         if i % 4 == 3 {
             print!(" ");
         }
         if i % 32 == 31 {
-            print!("\n");
+            println!();
         }
     }
     println!();

@@ -79,7 +79,8 @@ unsafe extern "C" fn _start() -> ! {
         "4:",
         "    // jump to kmain, which shouldn't return. halt if it does",
         "    bl      kmain",
-        "    // align vectors to 4096 bytes",
+        "    b       1b",
+        "    // align vectors to 2048 bytes",
         "    .align 11",
         "",
         "_vectors:",
@@ -118,6 +119,6 @@ unsafe extern "C" fn _start() -> ! {
         "mrs     x3, spsr_el1",
         "mrs     x4, far_el1",
         "b       exception_handler",
-    );
-    loop {}
+        options(noreturn)
+    )
 }

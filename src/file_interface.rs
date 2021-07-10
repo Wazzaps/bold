@@ -47,7 +47,7 @@ pub trait SyncWrite {
 }
 
 #[async_trait]
-pub trait Read {
+pub trait Read: Sync {
     async fn read(&self, buf: &mut [u8]) -> IoResult<usize>;
 
     async fn read_exact(&self, mut buf: &mut [u8]) -> IoResult<()> {
@@ -68,7 +68,7 @@ pub trait Read {
 }
 
 #[async_trait]
-pub trait Write {
+pub trait Write: Sync {
     async fn write(&self, buf: &[u8]) -> IoResult<usize>;
 
     async fn flush(&self) -> IoResult<()> {
@@ -91,7 +91,7 @@ pub trait Write {
 }
 
 #[async_trait]
-pub trait Control {
+pub trait Control: Sync {
     async fn call(&self, msg: FramebufferCM) -> IoResult<()>;
 }
 

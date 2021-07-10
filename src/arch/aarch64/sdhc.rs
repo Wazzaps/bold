@@ -1,113 +1,119 @@
 use crate::arch::aarch64::mmio::{
-    delay, delay_us_sync, mmio_read, mmio_write, GPFSEL4, GPFSEL5, GPHEN1, GPPUD, GPPUDCLK0,
-    GPPUDCLK1, MMIO_BASE,
+    delay, delay_us_sync, mmio_read, mmio_write, GPFSEL4, GPFSEL5, GPHEN1, GPPUD, GPPUDCLK1,
 };
 use crate::{print, println};
 
 pub struct SDHC {
     sd_scr: [u32; 2],
-    sd_ocr: u32,
+    #[allow(dead_code)]
+    sd_ocr: u32, // TODO: remove?
     sd_rca: u32,
     sd_hv: u32,
 }
 
-pub const EMMC_ARG2: u32 = MMIO_BASE + 0x00300000;
-pub const EMMC_BLKSIZECNT: u32 = MMIO_BASE + 0x00300004;
-pub const EMMC_ARG1: u32 = MMIO_BASE + 0x00300008;
-pub const EMMC_CMDTM: u32 = MMIO_BASE + 0x0030000C;
-pub const EMMC_RESP0: u32 = MMIO_BASE + 0x00300010;
-pub const EMMC_RESP1: u32 = MMIO_BASE + 0x00300014;
-pub const EMMC_RESP2: u32 = MMIO_BASE + 0x00300018;
-pub const EMMC_RESP3: u32 = MMIO_BASE + 0x0030001C;
-pub const EMMC_DATA: u32 = MMIO_BASE + 0x00300020;
-pub const EMMC_STATUS: u32 = MMIO_BASE + 0x00300024;
-pub const EMMC_CONTROL0: u32 = MMIO_BASE + 0x00300028;
-pub const EMMC_CONTROL1: u32 = MMIO_BASE + 0x0030002C;
-pub const EMMC_INTERRUPT: u32 = MMIO_BASE + 0x00300030;
-pub const EMMC_INT_MASK: u32 = MMIO_BASE + 0x00300034;
-pub const EMMC_INT_EN: u32 = MMIO_BASE + 0x00300038;
-pub const EMMC_CONTROL2: u32 = MMIO_BASE + 0x0030003C;
-pub const EMMC_SLOTISR_VER: u32 = MMIO_BASE + 0x003000FC;
+mod consts {
+    #![allow(dead_code)]
+    use crate::arch::aarch64::mmio::MMIO_BASE;
 
-// command flags
-pub const CMD_NEED_APP: u32 = 0x80000000;
-pub const CMD_RSPNS_48: u32 = 0x00020000;
-pub const CMD_ERRORS_MASK: u32 = 0xfff9c004;
-pub const CMD_RCA_MASK: u32 = 0xffff0000;
+    pub const EMMC_ARG2: u32 = MMIO_BASE + 0x00300000;
+    pub const EMMC_BLKSIZECNT: u32 = MMIO_BASE + 0x00300004;
+    pub const EMMC_ARG1: u32 = MMIO_BASE + 0x00300008;
+    pub const EMMC_CMDTM: u32 = MMIO_BASE + 0x0030000C;
+    pub const EMMC_RESP0: u32 = MMIO_BASE + 0x00300010;
+    pub const EMMC_RESP1: u32 = MMIO_BASE + 0x00300014;
+    pub const EMMC_RESP2: u32 = MMIO_BASE + 0x00300018;
+    pub const EMMC_RESP3: u32 = MMIO_BASE + 0x0030001C;
+    pub const EMMC_DATA: u32 = MMIO_BASE + 0x00300020;
+    pub const EMMC_STATUS: u32 = MMIO_BASE + 0x00300024;
+    pub const EMMC_CONTROL0: u32 = MMIO_BASE + 0x00300028;
+    pub const EMMC_CONTROL1: u32 = MMIO_BASE + 0x0030002C;
+    pub const EMMC_INTERRUPT: u32 = MMIO_BASE + 0x00300030;
+    pub const EMMC_INT_MASK: u32 = MMIO_BASE + 0x00300034;
+    pub const EMMC_INT_EN: u32 = MMIO_BASE + 0x00300038;
+    pub const EMMC_CONTROL2: u32 = MMIO_BASE + 0x0030003C;
+    pub const EMMC_SLOTISR_VER: u32 = MMIO_BASE + 0x003000FC;
 
-// COMMANDs
-pub const CMD_GO_IDLE: u32 = 0x00000000;
-pub const CMD_ALL_SEND_CID: u32 = 0x02010000;
-pub const CMD_SEND_REL_ADDR: u32 = 0x03020000;
-pub const CMD_CARD_SELECT: u32 = 0x07030000;
-pub const CMD_SEND_IF_COND: u32 = 0x08020000;
-pub const CMD_STOP_TRANS: u32 = 0x0C030000;
-pub const CMD_READ_SINGLE: u32 = 0x11220010;
-pub const CMD_READ_MULTI: u32 = 0x12220032;
-pub const CMD_WRITE_SINGLE: u32 = 0x18220000;
-pub const CMD_WRITE_MULTI: u32 = 0x19220022;
-pub const CMD_SET_BLOCKCNT: u32 = 0x17020000;
-pub const CMD_APP_CMD: u32 = 0x37000000;
-pub const CMD_SET_BUS_WIDTH: u32 = (0x06020000 | CMD_NEED_APP);
-pub const CMD_SEND_OP_COND: u32 = (0x29020000 | CMD_NEED_APP);
-pub const CMD_SEND_SCR: u32 = (0x33220010 | CMD_NEED_APP);
+    // command flags
+    pub const CMD_NEED_APP: u32 = 0x80000000;
+    pub const CMD_RSPNS_48: u32 = 0x00020000;
+    pub const CMD_ERRORS_MASK: u32 = 0xfff9c004;
+    pub const CMD_RCA_MASK: u32 = 0xffff0000;
 
-// STATUS register settings
-pub const SR_READ_AVAILABLE: u32 = 0x00000800;
-pub const SR_WRITE_AVAILABLE: u32 = 0x00000400;
-pub const SR_DAT_INHIBIT: u32 = 0x00000002;
-pub const SR_CMD_INHIBIT: u32 = 0x00000001;
-pub const SR_APP_CMD: u32 = 0x00000020;
+    // COMMANDs
+    pub const CMD_GO_IDLE: u32 = 0x00000000;
+    pub const CMD_ALL_SEND_CID: u32 = 0x02010000;
+    pub const CMD_SEND_REL_ADDR: u32 = 0x03020000;
+    pub const CMD_CARD_SELECT: u32 = 0x07030000;
+    pub const CMD_SEND_IF_COND: u32 = 0x08020000;
+    pub const CMD_STOP_TRANS: u32 = 0x0C030000;
+    pub const CMD_READ_SINGLE: u32 = 0x11220010;
+    pub const CMD_READ_MULTI: u32 = 0x12220032;
+    pub const CMD_WRITE_SINGLE: u32 = 0x18220000;
+    pub const CMD_WRITE_MULTI: u32 = 0x19220022;
+    pub const CMD_SET_BLOCKCNT: u32 = 0x17020000;
+    pub const CMD_APP_CMD: u32 = 0x37000000;
+    pub const CMD_SET_BUS_WIDTH: u32 = 0x06020000 | CMD_NEED_APP;
+    pub const CMD_SEND_OP_COND: u32 = 0x29020000 | CMD_NEED_APP;
+    pub const CMD_SEND_SCR: u32 = 0x33220010 | CMD_NEED_APP;
 
-// INTERRUPT register settings
-pub const INT_DATA_TIMEOUT: u32 = 0x00100000;
-pub const INT_CMD_TIMEOUT: u32 = 0x00010000;
-pub const INT_READ_RDY: u32 = 0x00000020;
-pub const INT_WRITE_RDY: u32 = 0x00000010;
-pub const INT_DATA_DONE: u32 = 0x00000002;
-pub const INT_CMD_DONE: u32 = 0x00000001;
+    // STATUS register settings
+    pub const SR_READ_AVAILABLE: u32 = 0x00000800;
+    pub const SR_WRITE_AVAILABLE: u32 = 0x00000400;
+    pub const SR_DAT_INHIBIT: u32 = 0x00000002;
+    pub const SR_CMD_INHIBIT: u32 = 0x00000001;
+    pub const SR_APP_CMD: u32 = 0x00000020;
 
-pub const INT_ERROR_MASK: u32 = 0x017E8000;
+    // INTERRUPT register settings
+    pub const INT_DATA_TIMEOUT: u32 = 0x00100000;
+    pub const INT_CMD_TIMEOUT: u32 = 0x00010000;
+    pub const INT_READ_RDY: u32 = 0x00000020;
+    pub const INT_WRITE_RDY: u32 = 0x00000010;
+    pub const INT_DATA_DONE: u32 = 0x00000002;
+    pub const INT_CMD_DONE: u32 = 0x00000001;
 
-// CONTROL register settings
-pub const C0_SPI_MODE_EN: u32 = 0x00100000;
-pub const C0_HCTL_HS_EN: u32 = 0x00000004;
-pub const C0_HCTL_DWITDH: u32 = 0x00000002;
+    pub const INT_ERROR_MASK: u32 = 0x017E8000;
 
-pub const C1_SRST_DATA: u32 = 0x04000000;
-pub const C1_SRST_CMD: u32 = 0x02000000;
-pub const C1_SRST_HC: u32 = 0x01000000;
-pub const C1_TOUNIT_DIS: u32 = 0x000f0000;
-pub const C1_TOUNIT_MAX: u32 = 0x000e0000;
-pub const C1_CLK_GENSEL: u32 = 0x00000020;
-pub const C1_CLK_EN: u32 = 0x00000004;
-pub const C1_CLK_STABLE: u32 = 0x00000002;
-pub const C1_CLK_INTLEN: u32 = 0x00000001;
+    // CONTROL register settings
+    pub const C0_SPI_MODE_EN: u32 = 0x00100000;
+    pub const C0_HCTL_HS_EN: u32 = 0x00000004;
+    pub const C0_HCTL_DWITDH: u32 = 0x00000002;
 
-// SLOTISR_VER values
-pub const HOST_SPEC_NUM: u32 = 0x00ff0000;
-pub const HOST_SPEC_NUM_SHIFT: u32 = 16;
-pub const HOST_SPEC_V3: u32 = 2;
-pub const HOST_SPEC_V2: u32 = 1;
-pub const HOST_SPEC_V1: u32 = 0;
+    pub const C1_SRST_DATA: u32 = 0x04000000;
+    pub const C1_SRST_CMD: u32 = 0x02000000;
+    pub const C1_SRST_HC: u32 = 0x01000000;
+    pub const C1_TOUNIT_DIS: u32 = 0x000f0000;
+    pub const C1_TOUNIT_MAX: u32 = 0x000e0000;
+    pub const C1_CLK_GENSEL: u32 = 0x00000020;
+    pub const C1_CLK_EN: u32 = 0x00000004;
+    pub const C1_CLK_STABLE: u32 = 0x00000002;
+    pub const C1_CLK_INTLEN: u32 = 0x00000001;
 
-// SCR flags
-pub const SCR_SD_BUS_WIDTH_4: u32 = 0x00000400;
-pub const SCR_SUPP_SET_BLKCNT: u32 = 0x02000000;
-// added by my driver
-pub const SCR_SUPP_CCS: u32 = 0x00000001;
+    // SLOTISR_VER values
+    pub const HOST_SPEC_NUM: u32 = 0x00ff0000;
+    pub const HOST_SPEC_NUM_SHIFT: u32 = 16;
+    pub const HOST_SPEC_V3: u32 = 2;
+    pub const HOST_SPEC_V2: u32 = 1;
+    pub const HOST_SPEC_V1: u32 = 0;
 
-pub const ACMD41_VOLTAGE: u32 = 0x00ff8000;
-pub const ACMD41_CMD_COMPLETE: u32 = 0x80000000;
-pub const ACMD41_CMD_CCS: u32 = 0x40000000;
-pub const ACMD41_ARG_HC: u32 = 0x51ff8000;
+    // SCR flags
+    pub const SCR_SD_BUS_WIDTH_4: u32 = 0x00000400;
+    pub const SCR_SUPP_SET_BLKCNT: u32 = 0x02000000;
+    // added by my driver
+    pub const SCR_SUPP_CCS: u32 = 0x00000001;
+
+    pub const ACMD41_VOLTAGE: u32 = 0x00ff8000;
+    pub const ACMD41_CMD_COMPLETE: u32 = 0x80000000;
+    pub const ACMD41_CMD_CCS: u32 = 0x40000000;
+    pub const ACMD41_ARG_HC: u32 = 0x51ff8000;
+}
+
+use consts::*;
 
 pub struct SdhcCmdError(pub u32);
 
 impl From<SdhcCmdError> for () {
     fn from(e: SdhcCmdError) -> Self {
         println!("[WARN] ERROR: Cmd returned error 0x{:x}", e.0);
-        ()
     }
 }
 
@@ -145,7 +151,7 @@ impl SDHC {
         // GPIO_DAT0, GPIO_DAT1, GPIO_DAT2, GPIO_DAT3
         mmio_write(
             GPFSEL5,
-            mmio_read(GPFSEL5) | (7 << (0 * 3)) | (7 << (1 * 3)) | (7 << (2 * 3)) | (7 << (3 * 3)),
+            mmio_read(GPFSEL5) | 7 | (7 << 3) | (7 << (2 * 3)) | (7 << (3 * 3)),
         );
         mmio_write(GPPUD, 2);
         delay(150);
@@ -154,7 +160,7 @@ impl SDHC {
         mmio_write(GPPUD, 0);
         mmio_write(GPPUDCLK1, 0);
 
-        sdhc.sd_hv = ((mmio_read(EMMC_SLOTISR_VER) & HOST_SPEC_NUM) >> HOST_SPEC_NUM_SHIFT);
+        sdhc.sd_hv = (mmio_read(EMMC_SLOTISR_VER) & HOST_SPEC_NUM) >> HOST_SPEC_NUM_SHIFT;
         println!("[INFO] EMMC GPIO set up");
 
         // Reset the card
@@ -309,8 +315,10 @@ impl SDHC {
 
         let flags = mmio_read(EMMC_INTERRUPT);
         let result = if !done || (flags & INT_CMD_TIMEOUT) != 0 || (flags & INT_DATA_TIMEOUT) != 0 {
+            println!("[WARN] EMMC: int timeout");
             Err(()) // Timeout
         } else if (flags & INT_ERROR_MASK) != 0 {
+            println!("[WARN] EMMC: int error");
             Err(()) // Error
         } else {
             Ok(())
@@ -351,7 +359,7 @@ impl SDHC {
             delay_us_sync(100);
         }
 
-        self.int(INT_CMD_DONE).map_err(|e| {
+        self.int(INT_CMD_DONE).map_err(|_| {
             println!("[WARN] ERROR: failed to send EMMC command");
             SdhcCmdError(0)
         })?;
@@ -392,7 +400,7 @@ impl SDHC {
 
     /// read blocks from the sd card
     pub unsafe fn read_block(&mut self, lba: u32, mut buf: &mut [u32]) -> Result<(), ()> {
-        if buf.len() % (512 / 4) != 0 || buf.len() == 0 {
+        if buf.len() % (512 / 4) != 0 || buf.is_empty() {
             return Err(());
         }
         let block_count = (buf.len() / (512 / 4)) as u32;
@@ -427,8 +435,8 @@ impl SDHC {
                 self.cmd(CMD_READ_SINGLE, (lba + block) * 512)?;
             }
             self.int(INT_READ_RDY)?;
-            for chunk in 0..128 {
-                buf[chunk] = mmio_read(EMMC_DATA);
+            for chunk in &mut buf[..128] {
+                *chunk = mmio_read(EMMC_DATA);
             }
             buf = &mut buf[(512 / 4)..];
         }
@@ -442,7 +450,7 @@ impl SDHC {
 
     /// write blocks from the sd card
     pub unsafe fn write_block(&mut self, lba: u32, mut buf: &[u32]) -> Result<(), ()> {
-        if buf.len() % (512 / 4) != 0 || buf.len() == 0 {
+        if buf.len() % (512 / 4) != 0 || buf.is_empty() {
             return Err(());
         }
         let block_count = (buf.len() / (512 / 4)) as u32;
@@ -477,8 +485,8 @@ impl SDHC {
                 self.cmd(CMD_WRITE_SINGLE, (lba + block) * 512)?;
             }
             self.int(INT_WRITE_RDY)?;
-            for chunk in 0..128 {
-                mmio_write(EMMC_DATA, buf[chunk]);
+            for chunk in &buf[..128] {
+                mmio_write(EMMC_DATA, *chunk);
             }
             buf = &buf[(512 / 4)..];
         }
@@ -538,7 +546,6 @@ impl SDHC {
                 shift -= 2;
             }
             if (x & 0x80000000) == 0 {
-                x <<= 1;
                 shift -= 1;
             }
             if shift > 0 {
@@ -565,7 +572,7 @@ impl SDHC {
         } else {
             0
         };
-        divisor = (((divisor & 0xff) << 8) | h);
+        divisor = ((divisor & 0xff) << 8) | h;
         mmio_write(
             EMMC_CONTROL1,
             (mmio_read(EMMC_CONTROL1) & 0xffff003f) | divisor,

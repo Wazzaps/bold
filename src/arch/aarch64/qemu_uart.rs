@@ -64,7 +64,7 @@ impl fi::Write for Device {
 #[async_trait]
 impl fi::Read for Device {
     async fn read(&self, buf: &mut [u8]) -> IoResult<usize> {
-        if buf.len() == 0 {
+        if buf.is_empty() {
             return Ok(0);
         }
         unsafe {
@@ -93,7 +93,7 @@ impl fi::SyncWrite for Device {
 
 impl fi::SyncRead for Device {
     fn read(&self, buf: &mut [u8]) -> IoResult<usize> {
-        if buf.len() == 0 {
+        if buf.is_empty() {
             return Ok(0);
         }
         unsafe {

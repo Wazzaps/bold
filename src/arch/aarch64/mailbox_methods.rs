@@ -1,6 +1,5 @@
 use crate::arch::aarch64::mailbox::{send_property_tag, send_property_tag_raw, TrimmedArray};
 use crate::console::Freq;
-use alloc::prelude::v1::Box;
 use core::ops::Deref;
 use core::ptr::slice_from_raw_parts;
 
@@ -55,6 +54,7 @@ pub fn set_clock_rate(clock_id: u32, rate: u32, skip_setting_turbo: bool) -> Res
 }
 
 /// Returns uptime in microseconds
+#[allow(dead_code)]
 pub fn get_stc() -> Result<u32, ()> {
     #[repr(C)]
     #[derive(Copy, Clone)]
@@ -90,7 +90,6 @@ pub fn get_kernel_args() -> Result<TrimmedArray<u8, 104>, ()> {
 
     let mut new_res_data = [0u8; 104];
     new_res_data[0..transmuted.len()].copy_from_slice(transmuted);
-    let new_res = TrimmedArray::new(new_res_data, transmuted.len());
 
-    Ok(unsafe { new_res })
+    Ok(TrimmedArray::new(new_res_data, transmuted.len()))
 }

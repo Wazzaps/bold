@@ -60,8 +60,8 @@ impl FreeList {
     }
 
     pub unsafe fn init(&mut self) {
-        let ram_start = (&__ram_start as *const u8 as usize);
-        let ram_end = (&__ram_end as *const u8 as usize);
+        let ram_start = &__ram_start as *const u8 as usize;
+        let ram_end = &__ram_end as *const u8 as usize;
         let ram_start_pages = (&__ram_start as *const u8 as usize) / PAGE_SIZE;
         let ram_end_pages = (&__ram_end as *const u8 as usize) / PAGE_SIZE;
         println!("[DBUG] Phymem range: 0p{:x}..0p{:x}", ram_start, ram_end);
@@ -72,19 +72,9 @@ impl FreeList {
         };
     }
 
+    #[allow(dead_code)]
     pub unsafe fn alloc_page(&mut self) -> Option<PhyAddr> {
-        let head = &mut self.data[self.head as usize];
-        if head.len > 0 {
-            let result = PhyAddr(((head.base + head.len - 1) as usize * PAGE_SIZE) as usize);
-            head.len -= 1;
-            if head.len == 0 && self.head != 0 {
-                head.base = 0;
-            }
-            self.free_count -= 1;
-            Some(result)
-        } else {
-            None
-        }
+        self.alloc_pages(1).map(|slice| slice.base)
     }
 
     pub unsafe fn alloc_pages(&mut self, len: u32) -> Option<PhySlice> {
@@ -105,6 +95,7 @@ impl FreeList {
         }
     }
 
+    #[allow(dead_code)]
     pub unsafe fn free_page(&mut self, addr: PhyAddr) {
         let page = (addr.0 / PAGE_SIZE) as u32;
 
@@ -124,4 +115,6 @@ impl FreeList {
         }
         self.free_count += 1;
     }
+
+    // TODO: free_pages
 }

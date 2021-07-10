@@ -1,6 +1,5 @@
 use crate::arch::aarch64::phymem::PhySlice;
 use crate::println;
-use core::ptr;
 use core::ptr::NonNull;
 use linked_list_allocator::{Heap, LockedHeap};
 
@@ -9,9 +8,10 @@ static ALLOCATOR: LockedHeap = LockedHeap::empty();
 
 pub unsafe fn init(range: PhySlice) {
     println!("[DBUG] Kernel virtual memory area: {:?}", range);
-    *ALLOCATOR.lock() = unsafe { Heap::new(range.base.0, range.len) };
+    *ALLOCATOR.lock() = Heap::new(range.base.0, range.len);
 }
 
-pub fn mmap(size: usize) -> Result<NonNull<*const ()>, ()> {
+#[allow(dead_code)]
+pub fn mmap(_size: usize) -> Result<NonNull<*const ()>, ()> {
     Err(())
 }
