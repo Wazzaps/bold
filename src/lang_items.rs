@@ -15,6 +15,7 @@ fn panic_handler(info: &PanicInfo) -> ! {
         println!("at {}", location);
     }
     println!("--- Bold Kernel v{} Panic! ---", env!("CARGO_PKG_VERSION"));
-    qemu_exit::AArch64::new().exit(1)
+    loop {}
+    // qemu_exit::AArch64::new().exit(1)
     // poweroff(false);
 }

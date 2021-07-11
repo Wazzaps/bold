@@ -12,7 +12,7 @@ extern crate alloc;
 
 use crate::arch::aarch64::mmio::{delay_us, get_uptime_us};
 use crate::arch::aarch64::{mailbox_methods, mmu, phymem, virtmem};
-use crate::driver_manager::DeviceType;
+use crate::driver_manager::{DeviceType, Driver};
 use alloc::boxed::Box;
 use qemu_exit::QEMUExit;
 
@@ -26,6 +26,8 @@ mod lang_items;
 pub(crate) mod utils;
 
 use crate::console::{dump_hex, dump_hex_slice};
+use crate::file_interface::SyncWrite;
+use crate::ktask::yield_now;
 use crate::ErrWarn;
 use core::ops::Deref;
 use core::ptr::slice_from_raw_parts;
@@ -42,6 +44,8 @@ where
     let end = get_uptime_us();
     if end < start + 16666 {
         delay_us(16666 - (end - start)).await;
+    } else {
+        yield_now();
     }
 }
 
@@ -60,14 +64,14 @@ unsafe fn syscall1(num: usize, mut arg1: usize) -> usize {
 /// This function assumes it runs only once, on a clean machine
 #[no_mangle]
 pub unsafe extern "C" fn kmain(dtb_addr: *const u8) {
+    // Init mmu so devices work
+    mmu::init().unwrap();
+
     // Early console
-    driver_manager::init_driver_by_name(b"QEMU-Only Raspberry Pi 3 UART0").warn();
-    console::set_main_console_by_name(b"QEMU-Only Raspberry Pi 3 UART0");
+    driver_manager::init_driver_by_name(b"Raspberry Pi 3 UART1").warn();
+    console::set_main_console_by_name(b"Raspberry Pi 3 UART1");
     println!("--- Bold Kernel v{} ---", env!("CARGO_PKG_VERSION"));
     println!("[INFO] Early console working");
-
-    // MMU
-    mmu::init().unwrap();
 
     // Try input
     // let con = driver_manager::device_by_type(DeviceType::Console).unwrap();
@@ -75,14 +79,6 @@ pub unsafe extern "C" fn kmain(dtb_addr: *const u8) {
     // con.read.unwrap()
     //     .read_exact(&mut buf).unwrap();
     // println!("{:?}", buf);
-
-    if !dtb_addr.is_null() {
-        println!("[DBUG] DTB snippet:");
-        let something = &*slice_from_raw_parts(dtb_addr, 128);
-        dump_hex_slice(something);
-    } else {
-        println!("[DBUG] No DTB given");
-    }
 
     // Memory allocator
     phymem::PHYMEM_FREE_LIST.lock().init();
@@ -100,21 +96,30 @@ pub unsafe extern "C" fn kmain(dtb_addr: *const u8) {
         println!("[DBUG] Boxed val2: {} (at &{:p})", heap_val2, &heap_val2);
     }
 
+    println!("[INFO] Loaded drivers: {:?}", driver_manager::drivers());
+
+    // Initialize main console, currently same as early-con
+    println!("[INFO] Initializing main console");
+    driver_manager::init_driver_by_name(b"Raspberry Pi 3 UART1").warn();
+    console::set_main_console_by_name(b"Raspberry Pi 3 UART1");
+    println!("[INFO] Main console working");
+
     // Get kernel command line
     let args = mailbox_methods::get_kernel_args().unwrap();
     println!("[INFO] Kernel command line: {:?}", args.deref());
 
-    // Start kernel tasks
-    ktask::init();
-
-    println!("[INFO] Loaded drivers: {:?}", driver_manager::drivers());
-
-    println!("[INFO] Initializing main console");
-    driver_manager::init_driver_by_name(b"Raspberry Pi 3 UART0").warn();
-    console::set_main_console_by_name(b"Raspberry Pi 3 UART0");
-    println!("[INFO] Main console working");
+    if !dtb_addr.is_null() {
+        println!("[DBUG] DTB snippet:");
+        let something = &*slice_from_raw_parts(dtb_addr, 128);
+        dump_hex_slice(something);
+    } else {
+        println!("[DBUG] No DTB given");
+    }
 
     driver_manager::init_all_drivers();
+
+    // Start kernel tasks
+    ktask::init();
 
     // Get root clock
     let rate = mailbox_methods::get_clock_rate(0).unwrap();
@@ -132,7 +137,8 @@ pub unsafe extern "C" fn kmain(dtb_addr: *const u8) {
             .unwrap()
             .ctrl
             .unwrap();
-        for i in 0..180 {
+        let mut i = 0;
+        loop {
             vsync(async || {
                 framebuffer
                     .call(framebuffer::FramebufferCM::DrawExample { variant: i })
@@ -140,14 +146,17 @@ pub unsafe extern "C" fn kmain(dtb_addr: *const u8) {
                     .warn();
             })
             .await;
+            i += 1;
         }
     });
 
     // Spawn some more tasks
     async fn example_task(id: usize) {
-        for i in 0..3 {
-            println!("[DBUG] Hello from task #{}: {}/3", id, i + 1);
+        let mut i = 0;
+        loop {
+            println!("[DBUG] Hello from task #{}: {}", id, i + 1);
             delay_us(1000000).await; // 1 second
+            i += 1;
         }
     }
     spawn_task!({ example_task(1).await });
@@ -176,12 +185,13 @@ pub unsafe extern "C" fn kmain(dtb_addr: *const u8) {
     dump_hex(&buf);
 
     // Modify first dword to demonstrate writing
-    buf[0] = 0xdeadbeef;
-    sdhc.write_block(0, &buf).unwrap();
-    sdhc.read_block(0, &mut buf).unwrap();
-    assert_eq!(buf[0], 0xdeadbeef);
+    // buf[0] = 0xdeadbeef;
+    // sdhc.write_block(0, &buf).unwrap();
+    // sdhc.read_block(0, &mut buf).unwrap();
+    // assert_eq!(buf[0], 0xdeadbeef);
 
     ktask::run();
 
-    qemu_exit::AArch64::new().exit(0);
+    loop {}
+    // qemu_exit::AArch64::new().exit(0);
 }

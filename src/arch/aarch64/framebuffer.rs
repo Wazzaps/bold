@@ -29,6 +29,8 @@ struct FramebufferInfo {
     size: u32,
 }
 
+#[link_section = ".dma"]
+#[used]
 static mut FB_INFO: FramebufferInfo = FramebufferInfo {
     width: FB_WIDTH,
     height: FB_HEIGHT,
@@ -100,18 +102,20 @@ impl fi::Control for Device {
         match msg {
             FramebufferCM::DrawExample { variant } => {
                 let fb_info = unsafe { (&FB_INFO as *const FramebufferInfo).read_volatile() };
-                let fb: *mut u8 = fb_info.pointer as usize as *mut u8;
+                let fb: *mut u8 = (fb_info.pointer & 0x3FFFFFFF) as usize as *mut u8;
                 let width = fb_info.width;
                 let height = fb_info.height;
                 let pitch = fb_info.pitch;
 
-                for y in 0..height {
-                    for x in 0..width {
-                        unsafe {
-                            let pixel = fb.offset((y * pitch + x * 3) as isize);
-                            pixel.offset(0).write_volatile(((x + variant) % 256) as u8);
-                            pixel.offset(1).write_volatile((y % 256) as u8);
-                            pixel.offset(2).write_volatile(0);
+                if !fb.is_null() {
+                    for y in 0..height {
+                        for x in 0..width {
+                            unsafe {
+                                let pixel = fb.offset((y * pitch + x * 3) as isize);
+                                pixel.offset(0).write_volatile(((x + variant) % 256) as u8);
+                                pixel.offset(1).write_volatile((y % 256) as u8);
+                                pixel.offset(2).write_volatile(0);
+                            }
                         }
                     }
                 }

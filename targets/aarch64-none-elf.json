@@ -20,7 +20,8 @@
     "ld": [
       "--script=src/arch/aarch64/linker.ld",
       "--gc-sections",
-      "--hash-style=sysv"
+      "--hash-style=sysv",
+      "-Bstatic"
     ]
   }
 }

@@ -54,6 +54,8 @@ impl PageTables {
 
 extern "C" {
     static mut __data_start: u8;
+    static mut __dma_start: u8;
+    static mut __dma_end: u8;
 }
 
 pub unsafe fn init() -> Result<(), ()> {
@@ -82,6 +84,9 @@ pub unsafe fn init() -> Result<(), ()> {
     // Identity map user area, L2 Table
     let iomem_cutoff = (mmio::MMIO_BASE >> 21) as usize;
     let data_cutoff = ((&__data_start) as *const u8 as u64 / PAGE_SIZE) as usize;
+    let dma_start = ((&__dma_start) as *const u8 as u64 / PAGE_SIZE) as usize;
+    let dma_end = ((&__dma_end) as *const u8 as u64 / PAGE_SIZE) as usize;
+    println!("dma_start = 0x{:x}, dma_end = 0x{:x}", dma_start, dma_end);
     for (i, tbl) in PAGING.user_l2.iter_mut().enumerate().skip(1) {
         *tbl = {
             (i << 21) as u64 | // Physical address
@@ -91,12 +96,32 @@ pub unsafe fn init() -> Result<(), ()> {
                 PT_USER |     // non-privileged
                 // different attributes for device memory
                 if i >= iomem_cutoff {
+                    println!("Defining 0x{:x} as DMA memory", i << 21);
                     PT_OSH | PT_DEV
                 } else {
                     PT_ISH | PT_MEM
                 }
         };
     }
+    println!("Defining 0x{:x} as DMA memory [fb]", 0x7f4 << 21);
+    PAGING.user_l2[500] = {
+        (0x1f4u64 << 21) as u64 | // Physical address
+            PT_BLOCK |    // map 2M block
+            PT_AF |       // accessed flag
+            PT_NX |       // no execute
+            PT_USER |     // non-privileged
+            PT_OSH | PT_DEV
+    };
+    // println!("->{:x}", PAGING.user_l2_high[500]);
+    println!("Defining 0x{:x} as DMA memory [fb]", 0x7f5 << 21);
+    PAGING.user_l2[501] = {
+        (0x1f5u64 << 21) as u64 | // Physical address
+            PT_BLOCK |    // map 2M block
+            PT_AF |       // accessed flag
+            PT_NX |       // no execute
+            PT_USER |     // non-privileged
+            PT_OSH | PT_DEV
+    };
 
     // User L3 table
     for (i, tbl) in PAGING.user_l3.iter_mut().enumerate() {
@@ -105,11 +130,13 @@ pub unsafe fn init() -> Result<(), ()> {
                 PT_PAGE |     // map 4k
                 PT_AF |       // accessed flag
                 PT_USER |     // non-privileged
-                PT_ISH |      // inner shareable
-                if i < 0x80 || i >= data_cutoff {
-                    PT_RW | PT_NX
+                if i >= dma_start && i < dma_end {
+                    println!("Defining 0x{:x} as DMA memory", i as u64 * PAGE_SIZE);
+                    PT_OSH | PT_DEV | PT_RW | PT_NX
+                } else if i < 0x80 || i >= data_cutoff {
+                    PT_MEM | PT_ISH | PT_RW | PT_NX
                 } else {
-                    PT_RO
+                    PT_MEM | PT_ISH | PT_RO
                 }
         };
     }
@@ -135,15 +162,17 @@ pub unsafe fn init() -> Result<(), ()> {
     };
 
     // Map kernel area, L3 Table
-    PAGING.kernel_l3[0] = {
-        // Physical address is zero
-        PT_PAGE |     // it has the "Present" flag, which must be set, and we have area in it mapped by pages
-            PT_AF |       // accessed flag. Without this we're going to have a Data Abort exception
-            PT_NX |
-            PT_KERNEL |     // privileged
-            PT_OSH |
-            PT_DEV
-    };
+    for (i, tbl) in PAGING.kernel_l3.iter_mut().enumerate() {
+        *tbl = {
+            (i as u64 * PAGE_SIZE) | // Physical address
+                PT_PAGE |     // it has the "Present" flag, which must be set, and we have area in it mapped by pages
+                PT_AF |       // accessed flag. Without this we're going to have a Data Abort exception
+                PT_NX |
+                PT_KERNEL |     // privileged
+                PT_OSH |
+                PT_DEV
+        }
+    }
 
     // Verify MMU is capable
     let id_aa64mmfr0_el1 = get_msr!(id_aa64mmfr0_el1);
@@ -194,18 +223,19 @@ pub unsafe fn init() -> Result<(), ()> {
     // Finally, toggle some bits in system control register to enable page translation
     asm!("dsb ish", "isb", options(nomem, nostack));
     let mut sctlr_el1 = get_msr!(sctlr_el1);
-    sctlr_el1 |= 0xC00800;
+    sctlr_el1 |= 0xC00800; // set mandatory reserved bits
     sctlr_el1 &= !((1<<25) |   // clear EE, little endian translation tables
-            (1<<57) |   // clear PAN3
-            (1<<12) |   // clear SPAN
+            // (1<<57) |   // clear PAN3
+            // (1<<12) |   // clear SPAN
             (1<<24) |   // clear E0E
             (1<<19) |   // clear WXN
             (1<<12) |   // clear I, no instruction cache
             (1<<4) |    // clear SA0
             (1<<3) |    // clear SA
-            (1<<2) |    // clear C, no cache at all
-            (1<<1));
-    sctlr_el1 |= 1 << 0; // Set M, enable MMU
+            // (1<<2) |    // clear C, no cache at all
+            (1<<1)); // clear A, no aligment check
+    sctlr_el1 |= (1 << 0) // Set M, enable MMU
+        | (1<<2); // Set C, no cache at all
     set_msr!(sctlr_el1, sctlr_el1);
     asm!("isb");
 

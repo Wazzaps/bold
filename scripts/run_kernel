@@ -15,6 +15,6 @@ DEFAULT_QEMU_ARGS=(
   "-append" "foo"
 )
 qemu-system-aarch64 \
-  -M raspi3 -serial stdio -semihosting "${DEFAULT_QEMU_ARGS[@]}" \
+  -M raspi3 -serial null -serial stdio -semihosting "${DEFAULT_QEMU_ARGS[@]}" \
   -kernel "$KERNEL_BIN" -s -d int,unimp,guest_errors,mmu \
   "${QEMU_ARGS[@]}" 2>&1

@@ -21,8 +21,16 @@ SECTIONS {
   }
 
   .data : {
-    *(.data .data.* .gnu.linkonce.d*)
+    *(.data .data.* .gnu.linkonce.d* .got .got.plt)
   }
+
+  . = ALIGN(4096);
+  __dma_start = .;
+  .dma : {
+    KEEP(*(.dma))
+  }
+  . = ALIGN(4096);
+  __dma_end = .;
 
   .bss (NOLOAD) : {
     . = ALIGN(32);

@@ -38,9 +38,9 @@ impl driver_manager::Driver for Driver {
                 new_val
             });
             mmio_write(GPPUD, 0); // enable pins 14 and 15
-            delay(150);
+            delay(1500);
             mmio_write(GPPUDCLK0, (1 << 14) | (1 << 15));
-            delay(150);
+            delay(1500);
             mmio_write(GPPUDCLK0, 0); // flush GPIO setup
             mmio_write(UART1_MU_CNTL, 3); // enable Tx, Rx
         }

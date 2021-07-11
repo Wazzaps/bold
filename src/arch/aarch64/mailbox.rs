@@ -28,11 +28,15 @@ struct MailboxMessage {
     rest: [u32; 34],
 }
 
-static MAILBOX: Mutex<MailboxMessage> = Mutex::new(MailboxMessage {
+static MAILBOX_LOCK: Mutex<()> = Mutex::new(());
+
+#[link_section = ".dma"]
+#[used]
+static mut MAILBOX_MSG: MailboxMessage = MailboxMessage {
     size: 0,
     magic: 0,
     rest: [0; 34],
-});
+};
 
 pub unsafe fn write_raw(data: u32) {
     while mmio_read(MBOX_STATUS) & MAIL_FULL != 0 {}
@@ -66,7 +70,14 @@ unsafe fn _send_property_tag(
     tag_capacity: u32,
     tag_data: &[u32],
 ) -> Result<TrimmedArray<u32, 26>, ()> {
-    let mut mailbox = MAILBOX.lock();
+    // Get reference to mailbox in device memory
+    // let mailbox = (&MAILBOX as *const Mutex<MailboxMessage> as *const u8)
+    //     .offset(0x7fffffffffe00001)
+    //     .offset(0x7fffffffffffffff) as *const Mutex<MailboxMessage>;
+    // let mut mailbox = (&*mailbox).lock();
+    let _lock = MAILBOX_LOCK.lock();
+    let mut mailbox = &mut MAILBOX_MSG;
+    // let mut mailbox = MAILBOX.lock();
 
     // Tag list header
     mailbox.size = tag_capacity + 6 * 4;
@@ -89,6 +100,7 @@ unsafe fn _send_property_tag(
     call_raw(mailbox.deref_mut() as *mut MailboxMessage as *mut u8);
 
     if mailbox.magic != MBOX_RESPONSE {
+        println!("[EROR] Wrong mailbox response");
         return Err(());
     }
 

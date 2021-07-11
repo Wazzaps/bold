@@ -176,10 +176,10 @@ pub async fn delay_us(time: u64) {
             counter = out(reg) counter,
             options(nomem, nostack)
             );
+            ktask::yield_now().await;
             if counter >= expires_at {
                 break;
             }
-            ktask::yield_now().await;
         }
     }
 }

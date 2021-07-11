@@ -1,4 +1,5 @@
-use crate::{get_msr, println};
+use crate::{get_msr, print, println};
+use core::mem::size_of;
 
 #[no_mangle]
 pub unsafe fn exception_handler(etype: u64, esr: u64, elr: u64, spsr: u64, far: u64) -> ! {
@@ -7,4 +8,39 @@ pub unsafe fn exception_handler(etype: u64, esr: u64, elr: u64, spsr: u64, far: 
         "Exception:\netype=0x{:x} esr=0x{:x} elr=0x{:x} spsr=0x{:x} far=0x{:x}",
         etype, esr, elr, spsr, far
     );
+}
+
+#[repr(C)]
+pub struct ExceptionContext {
+    /// General Purpose Registers.
+    gpr: [u64; 30],
+
+    /// The link register, aka x30.
+    lr: u64,
+
+    /// Exception link register. The program counter at the time the exception happened.
+    elr_el1: u64,
+
+    /// Saved program status.
+    spsr_el1: u64,
+}
+
+#[no_mangle]
+pub unsafe fn exception_handler2(e: &ExceptionContext) -> ! {
+    println!("-------------------------------------------");
+    let sp = (e as *const ExceptionContext as *const u8)
+        .offset(size_of::<ExceptionContext>() as isize) as *const u64;
+    println!("Registers:");
+    for reg in e.gpr {
+        print!("{:016x} ", reg);
+    }
+    println!();
+    println!("Exception reason: 0x{:x}", get_msr!(esr_el1));
+    println!("FAR (Address accessed): 0x{:x}", get_msr!(far_el1));
+    println!("PC: 0x{:x}", e.elr_el1);
+    println!("LR: 0x{:x}", e.lr);
+    println!("SP: {:p}", sp);
+    println!("SPSR: 0x{:x}", e.spsr_el1);
+    println!("-------------------------------------------");
+    loop {}
 }

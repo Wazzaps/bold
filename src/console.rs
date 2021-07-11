@@ -1,5 +1,6 @@
 use crate::driver_manager::{drivers, DeviceType};
 use crate::fi;
+use crate::println;
 use core::fmt;
 use core::fmt::Formatter;
 use core::mem::size_of;
@@ -29,7 +30,7 @@ macro_rules! print {
 #[macro_export]
 macro_rules! println {
     () => ($crate::print!("\n"));
-    ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
+    ($($arg:tt)*) => ($crate::print!("{}\r\n", format_args!($($arg)*)));
 }
 
 struct FmtWriteAdapter<'a>(&'a (dyn fi::SyncWrite));
