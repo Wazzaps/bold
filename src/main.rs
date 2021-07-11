@@ -12,9 +12,8 @@ extern crate alloc;
 
 use crate::arch::aarch64::mmio::{delay_us, get_uptime_us};
 use crate::arch::aarch64::{mailbox_methods, mmu, phymem, virtmem};
-use crate::driver_manager::{DeviceType, Driver};
+use crate::driver_manager::DeviceType;
 use alloc::boxed::Box;
-use qemu_exit::QEMUExit;
 
 pub(crate) mod arch;
 pub(crate) mod console;
@@ -26,7 +25,6 @@ mod lang_items;
 pub(crate) mod utils;
 
 use crate::console::{dump_hex, dump_hex_slice};
-use crate::file_interface::SyncWrite;
 use crate::ktask::yield_now;
 use crate::ErrWarn;
 use core::ops::Deref;
@@ -45,11 +43,12 @@ where
     if end < start + 16666 {
         delay_us(16666 - (end - start)).await;
     } else {
-        yield_now();
+        yield_now().await;
     }
 }
 
 #[inline(always)]
+#[allow(dead_code)]
 unsafe fn syscall1(num: usize, mut arg1: usize) -> usize {
     asm!(
         "svc #0",
@@ -177,7 +176,7 @@ pub unsafe extern "C" fn kmain(dtb_addr: *const u8) {
     // Call syscall (not yet implemented)
     // println!("result = 0x{:x}", syscall1(123, 321));
 
-    let mut sdhc = arch::aarch64::sdhc::SDHC::init().unwrap();
+    let mut sdhc = arch::aarch64::sdhc::Sdhc::init().unwrap();
     let mut buf = [0; 512 / 4];
     sdhc.read_block(0, &mut buf).unwrap();
 
@@ -192,6 +191,8 @@ pub unsafe extern "C" fn kmain(dtb_addr: *const u8) {
 
     ktask::run();
 
-    loop {}
+    loop {
+        asm!("wfe");
+    }
     // qemu_exit::AArch64::new().exit(0);
 }

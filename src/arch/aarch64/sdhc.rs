@@ -3,7 +3,7 @@ use crate::arch::aarch64::mmio::{
 };
 use crate::{print, println};
 
-pub struct SDHC {
+pub struct Sdhc {
     sd_scr: [u32; 2],
     #[allow(dead_code)]
     sd_ocr: u32, // TODO: remove?
@@ -117,7 +117,7 @@ impl From<SdhcCmdError> for () {
     }
 }
 
-impl SDHC {
+impl Sdhc {
     pub unsafe fn init() -> Result<Self, ()> {
         let mut sdhc = Self {
             sd_scr: [0, 0],
@@ -449,6 +449,7 @@ impl SDHC {
     }
 
     /// write blocks from the sd card
+    #[allow(dead_code)]
     pub unsafe fn write_block(&mut self, lba: u32, mut buf: &[u32]) -> Result<(), ()> {
         if buf.len() % (512 / 4) != 0 || buf.is_empty() {
             return Err(());
