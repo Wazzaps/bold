@@ -1,5 +1,5 @@
 use crate::arch::aarch64::mmio;
-use crate::arch::aarch64::phymem::{PhyAddr, PhySlice};
+use crate::arch::aarch64::phymem::PhyAddr;
 use crate::{get_msr, println, set_msr};
 use alloc::boxed::Box;
 use core::mem::size_of;
@@ -40,21 +40,19 @@ impl PageTable {
         Self([0; 512])
     }
 
-    pub unsafe fn use_child<F: FnOnce(Option<(usize, &PageTable)>)>(&self, idx: usize, f: F) {
+    pub unsafe fn use_child<F: FnOnce(Option<(u64, &PageTable)>)>(&self, idx: usize, f: F) {
         let paddr = self.0[idx] & 0x7FFFFFF000;
         let raw = self.0[idx];
         if paddr != 0 {
             // TODO: Assuming ident map
             let vaddr = paddr as usize;
-            (f)((vaddr as *const PageTable)
-                .as_ref()
-                .map(|v| (raw as usize, v)));
+            (f)((vaddr as *const PageTable).as_ref().map(|v| (raw, v)));
         } else {
             (f)(None);
         }
     }
 
-    pub unsafe fn use_child_mut<F: FnOnce(Option<(usize, &mut PageTable)>)>(
+    pub unsafe fn use_child_mut<F: FnOnce(Option<(u64, &mut PageTable)>)>(
         &mut self,
         idx: usize,
         f: F,
@@ -64,9 +62,7 @@ impl PageTable {
         if paddr != 0 {
             // TODO: Assuming ident map
             let vaddr = paddr as usize;
-            (f)((vaddr as *mut PageTable)
-                .as_mut()
-                .map(|v| (raw as usize, v)));
+            (f)((vaddr as *mut PageTable).as_mut().map(|v| (raw, v)));
         } else {
             (f)(None);
         }
@@ -296,7 +292,7 @@ pub unsafe fn init() -> Result<(), ()> {
 }
 
 #[allow(dead_code)]
-pub unsafe fn virt2phy(vaddr: usize) -> Option<PhyAddr> {
+pub unsafe fn virt2pte(vaddr: usize) -> Option<u64> {
     // TODO: Only support ttbr0 for now
     if vaddr % (PAGE_SIZE as usize) != 0 {
         return None;
@@ -308,15 +304,15 @@ pub unsafe fn virt2phy(vaddr: usize) -> Option<PhyAddr> {
         if let Some((raw1, lvl2)) = lvl2 {
             if (raw1 as u64) & PT_PAGE != PT_PAGE {
                 // Huge page
-                res = Some(raw1 & 0x7FFFFFF000);
+                res = Some(raw1);
             } else {
                 lvl2.use_child((vaddr >> 21) % 512, |lvl3| {
                     if let Some((raw2, lvl3)) = lvl3 {
                         if (raw2 as u64) & PT_PAGE != PT_PAGE {
                             // Huge page
-                            res = Some(raw2 & 0x7FFFFFF000);
+                            res = Some(raw2);
                         } else {
-                            res = Some((lvl3.0[(vaddr >> 12) % 512] & 0x7FFFFFF000) as usize);
+                            res = Some(lvl3.0[(vaddr >> 12) % 512]);
                         }
                     } else {
                         // println!("V2P: Not found in L2");
@@ -328,5 +324,10 @@ pub unsafe fn virt2phy(vaddr: usize) -> Option<PhyAddr> {
         }
     });
 
-    res.map(|r| PhyAddr(r))
+    res
+}
+
+#[allow(dead_code)]
+pub unsafe fn virt2phy(vaddr: usize) -> Option<PhyAddr> {
+    virt2pte(vaddr).map(|r| PhyAddr((r as usize) & 0x7FFFFFF000))
 }
