@@ -10,8 +10,3 @@ pub unsafe fn init(range: PhySlice) {
     println!("[DBUG] Kernel virtual memory area: {:?}", range);
     *ALLOCATOR.lock() = Heap::new(range.base.0, range.len);
 }
-
-#[allow(dead_code)]
-pub fn mmap(_size: usize) -> Result<NonNull<*const ()>, ()> {
-    Err(())
-}

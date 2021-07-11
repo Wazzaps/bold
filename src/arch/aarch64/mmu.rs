@@ -1,5 +1,8 @@
 use crate::arch::aarch64::mmio;
+use crate::arch::aarch64::phymem::{PhyAddr, PhySlice};
 use crate::{get_msr, println, set_msr};
+use alloc::boxed::Box;
+use core::mem::size_of;
 
 const PAGE_SIZE: u64 = 4096;
 
@@ -27,27 +30,76 @@ const PT_NC: u64 = 2 << 2;
 
 const TTBR_CNP: u64 = 1;
 
-static mut PAGING: PageTables = PageTables::new();
+static mut PAGING: PageTables = unsafe { PageTables::new() };
 
 #[repr(C, align(4096))]
+struct PageTable(pub [u64; 512]);
+
+impl PageTable {
+    pub const unsafe fn new() -> Self {
+        Self([0; 512])
+    }
+
+    pub unsafe fn use_child<F: FnOnce(Option<(usize, &PageTable)>)>(&self, idx: usize, f: F) {
+        let paddr = self.0[idx] & 0x7FFFFFF000;
+        let raw = self.0[idx];
+        if paddr != 0 {
+            // TODO: Assuming ident map
+            let vaddr = paddr as usize;
+            (f)((vaddr as *const PageTable)
+                .as_ref()
+                .map(|v| (raw as usize, v)));
+        } else {
+            (f)(None);
+        }
+    }
+
+    pub unsafe fn use_child_mut<F: FnOnce(Option<(usize, &mut PageTable)>)>(
+        &mut self,
+        idx: usize,
+        f: F,
+    ) {
+        let paddr = self.0[idx] & 0x7FFFFFF000;
+        let raw = self.0[idx];
+        if paddr != 0 {
+            // TODO: Assuming ident map
+            let vaddr = paddr as usize;
+            (f)((vaddr as *mut PageTable)
+                .as_mut()
+                .map(|v| (raw as usize, v)));
+        } else {
+            (f)(None);
+        }
+    }
+}
+
+impl Drop for PageTable {
+    fn drop(&mut self) {
+        unsafe {
+            let self_addr = self as *const Self as usize;
+            let paging_addr = &PAGING as *const PageTables as usize;
+            let paging_end = paging_addr + size_of::<PageTable>();
+            if self_addr < paging_addr || self_addr >= paging_end {
+                drop(Box::from_raw(self));
+            }
+        }
+    }
+}
+
+// TODO: AtomicU64?
+#[repr(C, align(4096))]
 struct PageTables {
-    user_l1: [u64; 512],
-    user_l2: [u64; 512],
-    user_l3: [u64; 512],
-    kernel_l1: [u64; 512],
-    kernel_l2: [u64; 512],
-    kernel_l3: [u64; 512],
+    user_l1: PageTable,
+    user_l2: PageTable,
+    user_l3: PageTable,
 }
 
 impl PageTables {
-    const fn new() -> Self {
+    const unsafe fn new() -> Self {
         Self {
-            user_l1: [0; 512],
-            user_l2: [0; 512],
-            user_l3: [0; 512],
-            kernel_l1: [0; 512],
-            kernel_l2: [0; 512],
-            kernel_l3: [0; 512],
+            user_l1: PageTable::new(),
+            user_l2: PageTable::new(),
+            user_l3: PageTable::new(),
         }
     }
 }
@@ -62,8 +114,8 @@ pub unsafe fn init() -> Result<(), ()> {
     println!("[DBUG] CurrentEL: {}", (get_msr!(CurrentEL) >> 2) & 0b11);
 
     // Identity map user area, L1 Table
-    PAGING.user_l1[0] = {
-        (PAGING.user_l2.as_ptr() as u64) | // Physical address
+    PAGING.user_l1.0[0] = {
+        (PAGING.user_l2.0.as_ptr() as u64) | // Physical address
             PT_PAGE |     // it has the "Present" flag, which must be set, and we have area in it mapped by pages
             PT_AF |       // accessed flag. Without this we're going to have a Data Abort exception
             PT_USER |     // non-privileged
@@ -72,8 +124,8 @@ pub unsafe fn init() -> Result<(), ()> {
     };
 
     // Identity map user area, L2 Table, first block
-    PAGING.user_l2[0] = {
-        (PAGING.user_l3.as_ptr() as u64) | // Physical address
+    PAGING.user_l2.0[0] = {
+        (PAGING.user_l3.0.as_ptr() as u64) | // Physical address
             PT_PAGE |     // it has the "Present" flag, which must be set, and we have area in it mapped by pages
             PT_AF |       // accessed flag. Without this we're going to have a Data Abort exception
             PT_USER |     // non-privileged
@@ -87,7 +139,7 @@ pub unsafe fn init() -> Result<(), ()> {
     let dma_start = ((&__dma_start) as *const u8 as u64 / PAGE_SIZE) as usize;
     let dma_end = ((&__dma_end) as *const u8 as u64 / PAGE_SIZE) as usize;
     println!("dma_start = 0x{:x}, dma_end = 0x{:x}", dma_start, dma_end);
-    for (i, tbl) in PAGING.user_l2.iter_mut().enumerate().skip(1) {
+    for (i, tbl) in PAGING.user_l2.0.iter_mut().enumerate().skip(1) {
         *tbl = {
             (i << 21) as u64 | // Physical address
                 PT_BLOCK |    // map 2M block
@@ -103,8 +155,8 @@ pub unsafe fn init() -> Result<(), ()> {
                 }
         };
     }
-    println!("Defining 0x{:x} as DMA memory [fb]", 0x7f4 << 21);
-    PAGING.user_l2[500] = {
+    println!("Defining 0x{:x} as DMA memory [fb]", 0x1f4 << 21);
+    PAGING.user_l2.0[500] = {
         (0x1f4u64 << 21) as u64 | // Physical address
             PT_BLOCK |    // map 2M block
             PT_AF |       // accessed flag
@@ -113,8 +165,8 @@ pub unsafe fn init() -> Result<(), ()> {
             PT_OSH | PT_DEV
     };
     // println!("->{:x}", PAGING.user_l2_high[500]);
-    println!("Defining 0x{:x} as DMA memory [fb]", 0x7f5 << 21);
-    PAGING.user_l2[501] = {
+    println!("Defining 0x{:x} as DMA memory [fb]", 0x1f5 << 21);
+    PAGING.user_l2.0[501] = {
         (0x1f5u64 << 21) as u64 | // Physical address
             PT_BLOCK |    // map 2M block
             PT_AF |       // accessed flag
@@ -124,7 +176,7 @@ pub unsafe fn init() -> Result<(), ()> {
     };
 
     // User L3 table
-    for (i, tbl) in PAGING.user_l3.iter_mut().enumerate() {
+    for (i, tbl) in PAGING.user_l3.0.iter_mut().enumerate() {
         *tbl = {
             (i as u64 * PAGE_SIZE) | // Physical address
                 PT_PAGE |     // map 4k
@@ -142,37 +194,37 @@ pub unsafe fn init() -> Result<(), ()> {
     }
 
     // Map kernel area, L1 Table
-    PAGING.kernel_l1[511] = {
-        (PAGING.kernel_l2.as_ptr() as u64) | // Physical address
-            PT_PAGE |     // it has the "Present" flag, which must be set, and we have area in it mapped by pages
-            PT_AF |       // accessed flag. Without this we're going to have a Data Abort exception
-            PT_KERNEL |     // privileged
-            PT_ISH |      // inner shareable
-            PT_MEM // normal memory
-    };
-
-    // Map kernel area, L2 Table
-    PAGING.kernel_l2[511] = {
-        (PAGING.kernel_l3.as_ptr() as u64) | // Physical address
-            PT_PAGE |     // it has the "Present" flag, which must be set, and we have area in it mapped by pages
-            PT_AF |       // accessed flag. Without this we're going to have a Data Abort exception
-            PT_KERNEL |     // privileged
-            PT_ISH |      // inner shareable
-            PT_MEM // normal memory
-    };
-
-    // Map kernel area, L3 Table
-    for (i, tbl) in PAGING.kernel_l3.iter_mut().enumerate() {
-        *tbl = {
-            (i as u64 * PAGE_SIZE) | // Physical address
-                PT_PAGE |     // it has the "Present" flag, which must be set, and we have area in it mapped by pages
-                PT_AF |       // accessed flag. Without this we're going to have a Data Abort exception
-                PT_NX |
-                PT_KERNEL |     // privileged
-                PT_OSH |
-                PT_DEV
-        }
-    }
+    // PAGING.kernel_l1[511] = {
+    //     (PAGING.kernel_l2.as_ptr() as u64) | // Physical address
+    //         PT_PAGE |     // it has the "Present" flag, which must be set, and we have area in it mapped by pages
+    //         PT_AF |       // accessed flag. Without this we're going to have a Data Abort exception
+    //         PT_KERNEL |     // privileged
+    //         PT_ISH |      // inner shareable
+    //         PT_MEM // normal memory
+    // };
+    //
+    // // Map kernel area, L2 Table
+    // PAGING.kernel_l2[511] = {
+    //     (PAGING.kernel_l3.as_ptr() as u64) | // Physical address
+    //         PT_PAGE |     // it has the "Present" flag, which must be set, and we have area in it mapped by pages
+    //         PT_AF |       // accessed flag. Without this we're going to have a Data Abort exception
+    //         PT_KERNEL |     // privileged
+    //         PT_ISH |      // inner shareable
+    //         PT_MEM // normal memory
+    // };
+    //
+    // // Map kernel area, L3 Table
+    // for (i, tbl) in PAGING.kernel_l3.iter_mut().enumerate() {
+    //     *tbl = {
+    //         (i as u64 * PAGE_SIZE) | // Physical address
+    //             PT_PAGE |     // it has the "Present" flag, which must be set, and we have area in it mapped by pages
+    //             PT_AF |       // accessed flag. Without this we're going to have a Data Abort exception
+    //             PT_NX |
+    //             PT_KERNEL |     // privileged
+    //             PT_OSH |
+    //             PT_DEV
+    //     }
+    // }
 
     // Verify MMU is capable
     let id_aa64mmfr0_el1 = get_msr!(id_aa64mmfr0_el1);
@@ -216,9 +268,9 @@ pub unsafe fn init() -> Result<(), ()> {
 
     // Tell the MMU where our translation tables are. TTBR_CNP bit not documented, but required
     // - lower half, user space
-    set_msr!(ttbr0_el1, PAGING.user_l1.as_ptr() as u64 + TTBR_CNP);
+    set_msr!(ttbr0_el1, PAGING.user_l1.0.as_ptr() as u64 + TTBR_CNP);
     // - upper half, kernel space
-    set_msr!(ttbr1_el1, PAGING.kernel_l1.as_ptr() as u64 + TTBR_CNP);
+    // set_msr!(ttbr1_el1, PAGING.kernel_l1.as_ptr() as u64 + TTBR_CNP);
 
     // Finally, toggle some bits in system control register to enable page translation
     asm!("dsb ish", "isb", options(nomem, nostack));
@@ -241,4 +293,40 @@ pub unsafe fn init() -> Result<(), ()> {
 
     println!("[DBUG] MMU Initialized");
     Ok(())
+}
+
+#[allow(dead_code)]
+pub unsafe fn virt2phy(vaddr: usize) -> Option<PhyAddr> {
+    // TODO: Only support ttbr0 for now
+    if vaddr % (PAGE_SIZE as usize) != 0 {
+        return None;
+    }
+    // println!("V2P: looking for 0x{:x}", vaddr);
+    let mut res = None;
+    let lvl1 = &mut PAGING.user_l1;
+    lvl1.use_child(vaddr >> 30, |lvl2| {
+        if let Some((raw1, lvl2)) = lvl2 {
+            if (raw1 as u64) & PT_PAGE != PT_PAGE {
+                // Huge page
+                res = Some(raw1 & 0x7FFFFFF000);
+            } else {
+                lvl2.use_child((vaddr >> 21) % 512, |lvl3| {
+                    if let Some((raw2, lvl3)) = lvl3 {
+                        if (raw2 as u64) & PT_PAGE != PT_PAGE {
+                            // Huge page
+                            res = Some(raw2 & 0x7FFFFFF000);
+                        } else {
+                            res = Some((lvl3.0[(vaddr >> 12) % 512] & 0x7FFFFFF000) as usize);
+                        }
+                    } else {
+                        // println!("V2P: Not found in L2");
+                    }
+                });
+            }
+        } else {
+            // println!("V2P: Not found in L1");
+        }
+    });
+
+    res.map(|r| PhyAddr(r))
 }

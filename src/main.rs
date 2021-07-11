@@ -72,6 +72,21 @@ pub unsafe extern "C" fn kmain(dtb_addr: *const u8) {
     println!("--- Bold Kernel v{} ---", env!("CARGO_PKG_VERSION"));
     println!("[INFO] Early console working");
 
+    println!("[DBUG] virt2phy tests:");
+    for addr in [
+        0,
+        0x1000,
+        0x80000,
+        0x1f4 << 21,
+        0x1f5 << 21,
+        0x1f6 << 21,
+        0x1f7 << 21,
+        0x1f7 << 21,
+        0x200 << 21,
+    ] {
+        println!("V2P(0x{:x}) -> {:?}", addr, mmu::virt2phy(addr));
+    }
+
     // Try input
     // let con = driver_manager::device_by_type(DeviceType::Console).unwrap();
     // let mut buf = [0; 4];

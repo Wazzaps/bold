@@ -71,13 +71,8 @@ unsafe fn _send_property_tag(
     tag_data: &[u32],
 ) -> Result<TrimmedArray<u32, 26>, ()> {
     // Get reference to mailbox in device memory
-    // let mailbox = (&MAILBOX as *const Mutex<MailboxMessage> as *const u8)
-    //     .offset(0x7fffffffffe00001)
-    //     .offset(0x7fffffffffffffff) as *const Mutex<MailboxMessage>;
-    // let mut mailbox = (&*mailbox).lock();
     let _lock = MAILBOX_LOCK.lock();
     let mut mailbox = &mut MAILBOX_MSG;
-    // let mut mailbox = MAILBOX.lock();
 
     // Tag list header
     mailbox.size = tag_capacity + 6 * 4;
