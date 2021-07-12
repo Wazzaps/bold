@@ -23,7 +23,6 @@ pub fn get_clock_rate(clock_id: u32) -> Result<Freq, ()> {
     Ok(Freq(res.rate as u64))
 }
 
-#[allow(dead_code)]
 pub fn set_clock_rate(clock_id: u32, rate: u32, skip_setting_turbo: bool) -> Result<Freq, ()> {
     #[repr(C)]
     #[derive(Copy, Clone)]
@@ -55,7 +54,6 @@ pub fn set_clock_rate(clock_id: u32, rate: u32, skip_setting_turbo: bool) -> Res
 }
 
 /// Returns uptime in microseconds
-#[allow(dead_code)]
 pub fn get_stc() -> Result<u32, ()> {
     #[repr(C)]
     #[derive(Copy, Clone)]

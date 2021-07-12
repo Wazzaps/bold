@@ -5,7 +5,6 @@ use crate::{print, println};
 
 pub struct Sdhc {
     sd_scr: [u32; 2],
-    #[allow(dead_code)]
     sd_ocr: u32, // TODO: remove?
     sd_rca: u32,
     sd_hv: u32,
@@ -449,7 +448,6 @@ impl Sdhc {
     }
 
     /// write blocks from the sd card
-    #[allow(dead_code)]
     pub unsafe fn write_block(&mut self, lba: u32, mut buf: &[u32]) -> Result<(), ()> {
         if buf.len() % (512 / 4) != 0 || buf.is_empty() {
             return Err(());

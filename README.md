@@ -63,6 +63,8 @@ Mix of:
 - [x] Switch to EL1 from EL2
 - [x] Enable paging for EL1
 - [x] CI with Docker + GH actions
+- [ ] Dynamically sized virtual allocator for kernel data
+    - [x] Dynamically map pages and allocate page tables
 - [ ] Exception handling
 - [ ] Parse tar initrd
 - [ ] Run code in EL0 (usermode)
@@ -72,7 +74,6 @@ Mix of:
 - [ ] VFS layer?
 - [ ] Simple Bluetooth
 - [ ] Power management for RPI3
-- [ ] Dynamically sized virtual allocator for kernel data
 - [ ] USB
 - [ ] USB HID Keyboard
 - [ ] USB CDC Ethernet

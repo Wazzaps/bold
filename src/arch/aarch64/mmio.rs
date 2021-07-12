@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 #![allow(clippy::identity_op)]
 
 use crate::ktask;

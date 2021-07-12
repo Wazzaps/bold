@@ -7,6 +7,7 @@
 #![no_std]
 #![no_main]
 #![feature(naked_functions)]
+#![allow(dead_code)]
 
 extern crate alloc;
 
@@ -24,6 +25,7 @@ pub(crate) mod ktask;
 mod lang_items;
 pub(crate) mod utils;
 
+use crate::arch::aarch64::phymem::PhyAddr;
 use crate::console::{dump_hex, dump_hex_slice};
 use crate::ktask::yield_now;
 use crate::ErrWarn;
@@ -48,7 +50,6 @@ where
 }
 
 #[inline(always)]
-#[allow(dead_code)]
 unsafe fn syscall1(num: usize, mut arg1: usize) -> usize {
     asm!(
         "svc #0",
@@ -101,6 +102,18 @@ pub unsafe extern "C" fn kmain(dtb_addr: *const u8) {
         .alloc_pages(16384)
         .expect("Failed to allocate dynamic kernel memory"); // 64MiB
     virtmem::init(kernel_virtmem);
+
+    // Map some page
+    const PAGE_FLAGS: u64 = mmu::PT_USER | // non-privileged
+        mmu::PT_ISH | // inner shareable
+        mmu::PT_MEM; // normal memory;
+    mmu::vmap(0x40000000, PhyAddr(0x80000), PAGE_FLAGS).warn();
+    println!(
+        "[DBUG] Accessing kernel code at {:?} via mapping at 0x{:x}",
+        PhyAddr(0x80000),
+        0x40000000
+    );
+    dump_hex_slice(&*slice_from_raw_parts(0x40000000 as *const u8, 64));
 
     // Test it
     {

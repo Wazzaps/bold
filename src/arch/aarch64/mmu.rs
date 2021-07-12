@@ -11,22 +11,21 @@ const PT_PAGE: u64 = 0b11;
 const PT_BLOCK: u64 = 0b01;
 
 // Accessibility
-const PT_KERNEL: u64 = 0 << 6;
-const PT_USER: u64 = 1 << 6;
-const PT_RW: u64 = 0 << 7;
-const PT_RO: u64 = 1 << 7;
-const PT_AF: u64 = 1 << 10;
-const PT_NX: u64 = 1 << 54;
+pub const PT_KERNEL: u64 = 0 << 6;
+pub const PT_USER: u64 = 1 << 6;
+pub const PT_RW: u64 = 0 << 7;
+pub const PT_RO: u64 = 1 << 7;
+pub const PT_AF: u64 = 1 << 10;
+pub const PT_NX: u64 = 1 << 54;
 
 // Share-ability
-const PT_OSH: u64 = 0b10 << 8;
-const PT_ISH: u64 = 0b11 << 8;
+pub const PT_OSH: u64 = 0b10 << 8;
+pub const PT_ISH: u64 = 0b11 << 8;
 
 // defined in MAIR register
-const PT_MEM: u64 = 0 << 2;
-const PT_DEV: u64 = 1 << 2;
-#[allow(dead_code)]
-const PT_NC: u64 = 2 << 2;
+pub const PT_MEM: u64 = 0 << 2;
+pub const PT_DEV: u64 = 1 << 2;
+pub const PT_NC: u64 = 2 << 2;
 
 const TTBR_CNP: u64 = 1;
 
@@ -40,9 +39,9 @@ impl PageTable {
         Self([0; 512])
     }
 
-    pub unsafe fn use_child<F: FnOnce(Option<(u64, &PageTable)>)>(&self, idx: usize, f: F) {
+    pub unsafe fn use_child<F: FnOnce(Option<(&u64, &PageTable)>)>(&self, idx: usize, f: F) {
         let paddr = self.0[idx] & 0x7FFFFFF000;
-        let raw = self.0[idx];
+        let raw = &self.0[idx];
         if paddr != 0 {
             // TODO: Assuming ident map
             let vaddr = paddr as usize;
@@ -52,13 +51,13 @@ impl PageTable {
         }
     }
 
-    pub unsafe fn use_child_mut<F: FnOnce(Option<(u64, &mut PageTable)>)>(
+    pub unsafe fn use_child_mut<F: FnOnce(Option<(&mut u64, &mut PageTable)>)>(
         &mut self,
         idx: usize,
         f: F,
     ) {
         let paddr = self.0[idx] & 0x7FFFFFF000;
-        let raw = self.0[idx];
+        let raw = &mut self.0[idx];
         if paddr != 0 {
             // TODO: Assuming ident map
             let vaddr = paddr as usize;
@@ -291,29 +290,30 @@ pub unsafe fn init() -> Result<(), ()> {
     Ok(())
 }
 
-#[allow(dead_code)]
-pub unsafe fn virt2pte(vaddr: usize) -> Option<u64> {
-    // TODO: Only support ttbr0 for now
+pub unsafe fn virt2pte_mut<F: FnMut(Option<&mut u64>)>(vaddr: usize, mut f: F) {
+    // TODO: Only supports ttbr0 for now
     if vaddr % (PAGE_SIZE as usize) != 0 {
-        return None;
+        (f)(None);
     }
     // println!("V2P: looking for 0x{:x}", vaddr);
-    let mut res = None;
+    let mut called = false;
     let lvl1 = &mut PAGING.user_l1;
-    lvl1.use_child(vaddr >> 30, |lvl2| {
+    lvl1.use_child_mut(vaddr >> 30, |lvl2| {
         if let Some((raw1, lvl2)) = lvl2 {
-            if (raw1 as u64) & PT_PAGE != PT_PAGE {
+            if *raw1 & PT_PAGE != PT_PAGE {
                 // Huge page
-                res = Some(raw1);
+                (f)(Some(raw1));
+                called = true;
             } else {
-                lvl2.use_child((vaddr >> 21) % 512, |lvl3| {
+                lvl2.use_child_mut((vaddr >> 21) % 512, |lvl3| {
                     if let Some((raw2, lvl3)) = lvl3 {
-                        if (raw2 as u64) & PT_PAGE != PT_PAGE {
+                        if *raw2 & PT_PAGE != PT_PAGE {
                             // Huge page
-                            res = Some(raw2);
+                            (f)(Some(raw2));
                         } else {
-                            res = Some(lvl3.0[(vaddr >> 12) % 512]);
+                            (f)(Some(&mut lvl3.0[(vaddr >> 12) % 512]));
                         }
+                        called = true;
                     } else {
                         // println!("V2P: Not found in L2");
                     }
@@ -323,11 +323,95 @@ pub unsafe fn virt2pte(vaddr: usize) -> Option<u64> {
             // println!("V2P: Not found in L1");
         }
     });
+    if !called {
+        (f)(None);
+    }
+}
 
+pub unsafe fn virt2pte(vaddr: usize) -> Option<u64> {
+    let mut res = None;
+    {
+        let res = &mut res;
+        virt2pte_mut(vaddr, move |r| *res = r.map(|inner| *inner));
+    }
     res
 }
 
-#[allow(dead_code)]
+/// Gnarly code ahead
+pub unsafe fn vmap(vaddr: usize, paddr: PhyAddr, attrs: u64) -> Result<(), ()> {
+    // TODO: Only supports ttbr0 for now
+    // TODO: Doesn't ever free lvl2,3 tables if empty
+    if vaddr % (PAGE_SIZE as usize) != 0 {
+        return Err(());
+    }
+
+    let mut res = Err(());
+    println!("[DBUG] VMAP: Mapping 0x{:x} to {:?}", vaddr, paddr);
+
+    const COMMON_FLAGS: u64 = PT_PAGE | // it has the "Present" flag, which must be set, and we have area in it mapped by pages
+        PT_AF; // accessed flag. Without this we're going to have a Data Abort exception
+
+    const TABLE_FLAGS: u64 = PT_PAGE | // it has the "Present" flag, which must be set, and we have area in it mapped by pages
+            PT_AF | // accessed flag. Without this we're going to have a Data Abort exception
+            PT_USER | // non-privileged
+            PT_ISH | // inner shareable
+            PT_MEM; // normal memory
+
+    // Look for lvl1 entry
+    let lvl2 = PAGING.user_l1.0[vaddr >> 30];
+    if lvl2 == 0 {
+        // Create new lvl2 table
+        let new_table = Box::new(PageTable::new());
+        PAGING.user_l1.0[vaddr >> 30] =
+            Box::leak(new_table) as *mut PageTable as usize as u64 | TABLE_FLAGS;
+        println!(
+            "[DBUG] VMAP: Allocated new lvl2 page table: 0x{:x}",
+            PAGING.user_l1.0[vaddr >> 30]
+        );
+    }
+
+    // lvl2 table exists now
+    PAGING.user_l1.use_child_mut(vaddr >> 30, |lvl2| {
+        if let Some((_, lvl2)) = lvl2 {
+            let lvl3 = lvl2.0[(vaddr >> 21) % 512];
+            if lvl3 == 0 {
+                // Create new lvl3 table
+                let new_table = Box::new(PageTable::new());
+                lvl2.0[(vaddr >> 21) % 512] =
+                    Box::leak(new_table) as *mut PageTable as usize as u64 | TABLE_FLAGS;
+                println!(
+                    "[DBUG] VMAP: Allocated new lvl3 page table: 0x{:x}",
+                    lvl2.0[(vaddr >> 21) % 512]
+                );
+            }
+
+            // lvl3 table exists now
+            lvl2.use_child_mut((vaddr >> 21) % 512, |lvl3| {
+                if let Some((_, lvl3)) = lvl3 {
+                    if lvl3.0[(vaddr >> 12) % 512] == 0 {
+                        lvl3.0[(vaddr >> 12) % 512] = paddr.0 as u64 | COMMON_FLAGS | attrs;
+                        res = Ok(());
+                    } else {
+                        // Already mapped!
+                        println!(
+                            "[WARN] VMAP: Tried to map 0x{:x} to {:?}, already mapped to {:?}",
+                            vaddr,
+                            paddr,
+                            PhyAddr((lvl3.0[(vaddr >> 12) % 512] & 0x7FFFFFF000) as usize)
+                        );
+                        res = Err(());
+                    }
+                } else {
+                    unreachable!();
+                };
+            });
+        } else {
+            unreachable!();
+        }
+    });
+    res
+}
+
 pub unsafe fn virt2phy(vaddr: usize) -> Option<PhyAddr> {
     virt2pte(vaddr).map(|r| PhyAddr((r as usize) & 0x7FFFFFF000))
 }

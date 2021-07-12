@@ -72,7 +72,6 @@ impl FreeList {
         };
     }
 
-    #[allow(dead_code)]
     pub unsafe fn alloc_page(&mut self) -> Option<PhyAddr> {
         self.alloc_pages(1).map(|slice| slice.base)
     }
@@ -95,7 +94,6 @@ impl FreeList {
         }
     }
 
-    #[allow(dead_code)]
     pub unsafe fn free_page(&mut self, addr: PhyAddr) {
         let page = (addr.0 / PAGE_SIZE) as u32;
 

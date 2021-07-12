@@ -112,7 +112,6 @@ pub fn init_all_drivers() {
     }
 }
 
-#[allow(dead_code)]
 pub fn device_by_type(device_type: DeviceType) -> Option<&'static fi::FileInterface> {
     for driver in drivers() {
         if driver.info().initialized {

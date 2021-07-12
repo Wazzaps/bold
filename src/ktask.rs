@@ -12,7 +12,6 @@ pub struct Task {
 }
 
 impl Task {
-    #[allow(dead_code)]
     pub fn new(future: impl Future<Output = ()> + Send + 'static) -> Task {
         Task {
             future: Box::pin(future),
@@ -54,7 +53,6 @@ impl SimpleExecutor {
         }
     }
 
-    #[allow(dead_code)]
     pub fn run_blocking(task: Task) {
         let mut executor = SimpleExecutor::new();
         executor.spawn(task);

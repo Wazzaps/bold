@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use crate::arch::aarch64::mmio::{
     mmio_read, mmio_write, RNG_CTRL, RNG_DATA, RNG_INT_MASK, RNG_STATUS,
 };

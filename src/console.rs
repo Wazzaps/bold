@@ -69,7 +69,6 @@ pub fn dump_hex<T>(val: &T) {
     println!();
 }
 
-#[allow(dead_code)]
 pub fn dump_hex_slice(val: &[u8]) {
     for (i, byte) in val.iter().enumerate() {
         print!("{:02x}", byte);
