@@ -43,7 +43,7 @@ impl PageTable {
         let paddr = self.0[idx] & 0x7FFFFFF000;
         let raw = &self.0[idx];
         if paddr != 0 {
-            // TODO: Assuming ident map
+            // FIXME: Assuming ident map
             let vaddr = paddr as usize;
             (f)((vaddr as *const PageTable).as_ref().map(|v| (raw, v)));
         } else {
@@ -59,7 +59,7 @@ impl PageTable {
         let paddr = self.0[idx] & 0x7FFFFFF000;
         let raw = &mut self.0[idx];
         if paddr != 0 {
-            // TODO: Assuming ident map
+            // FIXME: Assuming ident map
             let vaddr = paddr as usize;
             (f)((vaddr as *mut PageTable).as_mut().map(|v| (raw, v)));
         } else {
@@ -68,17 +68,14 @@ impl PageTable {
     }
 }
 
-impl Drop for PageTable {
-    fn drop(&mut self) {
-        unsafe {
-            let self_addr = self as *const Self as usize;
-            let paging_addr = &PAGING as *const PageTables as usize;
-            let paging_end = paging_addr + size_of::<PageTable>();
-            if self_addr < paging_addr || self_addr >= paging_end {
-                drop(Box::from_raw(self));
-            }
-        }
+unsafe fn drop_pagetable(pt: &mut PageTable) {
+    let pt_addr = pt as *const PageTable as usize;
+    let paging_addr = &PAGING as *const PageTables as usize;
+    let paging_end = paging_addr + size_of::<PageTable>();
+    if pt_addr < paging_addr || pt_addr >= paging_end {
+        drop(Box::from_raw(pt));
     }
+    println!("[DBUG] VMAP: Dropped a page table at 0x{:x}", pt_addr);
 }
 
 // TODO: AtomicU64?
@@ -337,6 +334,11 @@ pub unsafe fn virt2pte(vaddr: usize) -> Option<u64> {
     res
 }
 
+// FIXME: broken with huge pages i think
+pub unsafe fn virt2phy(vaddr: usize) -> Option<PhyAddr> {
+    virt2pte(vaddr).map(|r| PhyAddr((r as usize) & 0x7FFFFFF000))
+}
+
 /// Gnarly code ahead
 pub unsafe fn vmap(vaddr: usize, paddr: PhyAddr, attrs: u64) -> Result<(), ()> {
     // TODO: Only supports ttbr0 for now
@@ -409,9 +411,35 @@ pub unsafe fn vmap(vaddr: usize, paddr: PhyAddr, attrs: u64) -> Result<(), ()> {
             unreachable!();
         }
     });
+    if res.is_ok() {
+        asm!("dsb ishst", "tlbi vmalle1is", "dsb ish", "isb"); // taken from linux
+    }
     res
 }
 
-pub unsafe fn virt2phy(vaddr: usize) -> Option<PhyAddr> {
-    virt2pte(vaddr).map(|r| PhyAddr((r as usize) & 0x7FFFFFF000))
+/// Gnarly code ahead
+pub unsafe fn vunmap(vaddr: usize) -> Result<(), ()> {
+    // TODO: Only supports ttbr0 for now
+    // TODO: Doesn't ever free lvl2,3 tables if empty
+    // TODO: Frees whole huge pages
+    if vaddr % (PAGE_SIZE as usize) != 0 {
+        return Err(());
+    }
+
+    let mut res = Err(());
+    println!("[DBUG] VMAP: Unmapping 0x{:x}", vaddr);
+
+    virt2pte_mut(vaddr, |pte| {
+        if let Some(pte) = pte {
+            *pte = 0;
+            res = Ok(());
+        } else {
+            println!("[WARN] VMAP: Double vunmap of 0x{:x}", vaddr);
+            return;
+        }
+    });
+    if res.is_ok() {
+        asm!("dsb ishst", "tlbi vmalle1is", "dsb ish", "isb"); // taken from linux
+    }
+    res
 }

@@ -107,13 +107,16 @@ pub unsafe extern "C" fn kmain(dtb_addr: *const u8) {
     const PAGE_FLAGS: u64 = mmu::PT_USER | // non-privileged
         mmu::PT_ISH | // inner shareable
         mmu::PT_MEM; // normal memory;
-    mmu::vmap(0x40000000, PhyAddr(0x80000), PAGE_FLAGS).warn();
+    mmu::vmap(0x40000000, PhyAddr(0x80000), PAGE_FLAGS).unwrap();
     println!(
         "[DBUG] Accessing kernel code at {:?} via mapping at 0x{:x}",
         PhyAddr(0x80000),
         0x40000000
     );
     dump_hex_slice(&*slice_from_raw_parts(0x40000000 as *const u8, 64));
+    mmu::vunmap(0x40000000).unwrap();
+    // The following line will crash as expected:
+    // dump_hex_slice(&*slice_from_raw_parts(0x40000000 as *const u8, 64));
 
     // Test it
     {
