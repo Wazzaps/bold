@@ -287,11 +287,11 @@ pub unsafe fn init() -> Result<(), ()> {
     Ok(())
 }
 
-pub unsafe fn virt2pte_mut<F: FnMut(Option<&mut u64>)>(vaddr: usize, mut f: F) {
+pub unsafe fn virt2pte_mut<F: FnMut(Option<(&mut u64, usize)>)>(mut vaddr: usize, mut f: F) {
     // TODO: Only supports ttbr0 for now
-    if vaddr % (PAGE_SIZE as usize) != 0 {
-        (f)(None);
-    }
+    let lvl3_offset = vaddr % (PAGE_SIZE as usize);
+    vaddr -= lvl3_offset;
+
     // println!("V2P: looking for 0x{:x}", vaddr);
     let mut called = false;
     let lvl1 = &mut PAGING.user_l1;
@@ -299,16 +299,18 @@ pub unsafe fn virt2pte_mut<F: FnMut(Option<&mut u64>)>(vaddr: usize, mut f: F) {
         if let Some((raw1, lvl2)) = lvl2 {
             if *raw1 & PT_PAGE != PT_PAGE {
                 // Huge page
-                (f)(Some(raw1));
+                let lvl1_offset = vaddr & 0x3fffffff;
+                (f)(Some((raw1, lvl1_offset + lvl3_offset)));
                 called = true;
             } else {
                 lvl2.use_child_mut((vaddr >> 21) % 512, |lvl3| {
                     if let Some((raw2, lvl3)) = lvl3 {
                         if *raw2 & PT_PAGE != PT_PAGE {
                             // Huge page
-                            (f)(Some(raw2));
+                            let lvl2_offset = vaddr & 0x1fffff;
+                            (f)(Some((raw2, lvl2_offset + lvl3_offset)));
                         } else {
-                            (f)(Some(&mut lvl3.0[(vaddr >> 12) % 512]));
+                            (f)(Some((&mut lvl3.0[(vaddr >> 12) % 512], lvl3_offset)));
                         }
                         called = true;
                     } else {
@@ -325,18 +327,17 @@ pub unsafe fn virt2pte_mut<F: FnMut(Option<&mut u64>)>(vaddr: usize, mut f: F) {
     }
 }
 
-pub unsafe fn virt2pte(vaddr: usize) -> Option<u64> {
+pub unsafe fn virt2pte(vaddr: usize) -> Option<(u64, usize)> {
     let mut res = None;
     {
         let res = &mut res;
-        virt2pte_mut(vaddr, move |r| *res = r.map(|inner| *inner));
+        virt2pte_mut(vaddr, move |r| *res = r.map(|(pte, offset)| (*pte, offset)));
     }
     res
 }
 
-// FIXME: broken with huge pages i think
 pub unsafe fn virt2phy(vaddr: usize) -> Option<PhyAddr> {
-    virt2pte(vaddr).map(|r| PhyAddr((r as usize) & 0x7FFFFFF000))
+    virt2pte(vaddr).map(|(pte, offset)| PhyAddr(((pte as usize) & 0x7FFFFFF000) + offset))
 }
 
 /// Gnarly code ahead
@@ -430,12 +431,11 @@ pub unsafe fn vunmap(vaddr: usize) -> Result<(), ()> {
     println!("[DBUG] VMAP: Unmapping 0x{:x}", vaddr);
 
     virt2pte_mut(vaddr, |pte| {
-        if let Some(pte) = pte {
+        if let Some((pte, _)) = pte {
             *pte = 0;
             res = Ok(());
         } else {
             println!("[WARN] VMAP: Double vunmap of 0x{:x}", vaddr);
-            return;
         }
     });
     if res.is_ok() {

@@ -77,8 +77,10 @@ pub unsafe extern "C" fn kmain(dtb_addr: *const u8) {
     for addr in [
         0,
         0x1000,
+        0x1234,
         0x80000,
         0x1f4 << 21,
+        (0x1f4 << 21) + 0x12345,
         0x1f5 << 21,
         0x1f6 << 21,
         0x1f7 << 21,
