@@ -21,6 +21,7 @@ pub(crate) mod console;
 pub(crate) mod driver_manager;
 mod file_interface;
 pub(crate) mod framebuffer;
+pub(crate) mod ipc;
 pub(crate) mod ktask;
 mod lang_items;
 pub(crate) mod utils;
@@ -67,11 +68,28 @@ pub unsafe extern "C" fn kmain(dtb_addr: *const u8) {
     // Init mmu so devices work
     mmu::init().unwrap();
 
+    // Memory allocator
+    {
+        let mut phymem = phymem::PHYMEM_FREE_LIST.lock();
+        phymem.init();
+        let kernel_virtmem = phymem
+            .alloc_pages(16384) // 64MiB
+            .expect("Failed to allocate dynamic kernel memory");
+        virtmem::init(kernel_virtmem);
+    }
+
+    // Start kernel tasks
+    ktask::init();
+
     // Early console
     driver_manager::init_driver_by_name(b"Raspberry Pi 3 UART1").warn();
     console::set_main_console_by_name(b"Raspberry Pi 3 UART1");
     println!("--- Bold Kernel v{} ---", env!("CARGO_PKG_VERSION"));
     println!("[INFO] Early console working");
+
+    // IPC
+    ipc::init();
+    ktask::SimpleExecutor::run_blocking(ktask::Task::new_raw(Box::pin(ipc::test())));
 
     println!("[DBUG] virt2phy tests:");
     for addr in [
@@ -96,14 +114,6 @@ pub unsafe extern "C" fn kmain(dtb_addr: *const u8) {
     // con.read.unwrap()
     //     .read_exact(&mut buf).unwrap();
     // println!("{:?}", buf);
-
-    // Memory allocator
-    phymem::PHYMEM_FREE_LIST.lock().init();
-    let kernel_virtmem = phymem::PHYMEM_FREE_LIST
-        .lock()
-        .alloc_pages(16384)
-        .expect("Failed to allocate dynamic kernel memory"); // 64MiB
-    virtmem::init(kernel_virtmem);
 
     // Map some page
     const PAGE_FLAGS: u64 = mmu::PT_USER | // non-privileged
@@ -149,9 +159,6 @@ pub unsafe extern "C" fn kmain(dtb_addr: *const u8) {
     }
 
     driver_manager::init_all_drivers();
-
-    // Start kernel tasks
-    ktask::init();
 
     // Get root clock
     let rate = mailbox_methods::get_clock_rate(0).unwrap();
