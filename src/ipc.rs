@@ -18,13 +18,13 @@ struct IpcRef {
 impl Debug for IpcRef {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self.inner.as_ref() {
-            IpcNode::Dir(_) => write!(f, "IpcNode::Dir#{}", self.id),
-            IpcNode::SpscQueue(_) => write!(f, "IpcNode::SpscQueue#{}", self.id),
-            IpcNode::SpmcQueue => write!(f, "IpcNode::SpmcQueue#{}", self.id),
-            IpcNode::MpscQueue => write!(f, "IpcNode::MpscQueue#{}", self.id),
-            IpcNode::MpmcQueue => write!(f, "IpcNode::MpmcQueue#{}", self.id),
-            IpcNode::Blob => write!(f, "IpcNode::Blob#{}", self.id),
-            IpcNode::Endpoint => write!(f, "IpcNode::Endpoint#{}", self.id),
+            IpcNode::Dir(_) => write!(f, "IpcNode::Dir#{:x}", self.id),
+            IpcNode::SpscQueue(_) => write!(f, "IpcNode::SpscQueue#{:x}", self.id),
+            IpcNode::SpmcQueue => write!(f, "IpcNode::SpmcQueue#{:x}", self.id),
+            IpcNode::MpscQueue => write!(f, "IpcNode::MpscQueue#{:x}", self.id),
+            IpcNode::MpmcQueue => write!(f, "IpcNode::MpmcQueue#{:x}", self.id),
+            IpcNode::Blob => write!(f, "IpcNode::Blob#{:x}", self.id),
+            IpcNode::Endpoint => write!(f, "IpcNode::Endpoint#{:x}", self.id),
         }
     }
 }
@@ -136,6 +136,16 @@ impl IpcRef {
     }
 
     pub async fn dir_create(&self, id: u64) -> Option<IpcRef> {
+        self.dir_link(
+            id,
+            Arc::new(IpcNode::Dir(IpcDir {
+                entries: RwLock::new(vec![]),
+            })),
+        )
+        .await
+    }
+
+    pub async fn dir_link(&self, id: u64, node: Arc<IpcNode>) -> Option<IpcRef> {
         if !matches!(self.inner.as_ref(), IpcNode::Dir(_)) {
             return None;
         }
@@ -147,12 +157,7 @@ impl IpcRef {
                 return None;
             }
         }
-        let new_ent = IpcRef {
-            id,
-            inner: Arc::new(IpcNode::Dir(IpcDir {
-                entries: RwLock::new(vec![]),
-            })),
-        };
+        let new_ent = IpcRef { id, inner: node };
         entries.push(new_ent.clone());
 
         Some(new_ent)
@@ -234,6 +239,11 @@ pub fn init() {
 
 pub async fn test() {
     let ipc_dir = ROOT.read().as_ref().unwrap().clone();
+
+    // Add directory using `dir_create`
+    ipc_dir.dir_create(0xdeadbeef).await.unwrap();
+
+    // List root recursively
     let mut stream = ipc_dir.dir_list().unwrap();
     while let Some(item) = stream.next().await {
         println!("- {:?}", item);
