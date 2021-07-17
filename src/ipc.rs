@@ -1,15 +1,13 @@
 use crate::println;
 use crate::unwrap_variant;
 use alloc::boxed::Box;
-use alloc::sync::{Arc, Weak};
+use alloc::sync::Arc;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::fmt::{Debug, Formatter};
-use core::future::Future;
-use core::pin::Pin;
 use futures::future::BoxFuture;
 use futures::stream::BoxStream;
-use futures::{stream, Stream, StreamExt};
+use futures::{stream, StreamExt};
 use spin::RwLock;
 
 #[derive(Clone)]
