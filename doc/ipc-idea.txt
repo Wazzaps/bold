@@ -1,0 +1,34 @@
+# --------- UART EXAMPLE ---------
+# Equivalent
+port = open_stream('/dev/uart1', R | W)
+port = open_stream('/dev/uart1/port', R | W)
+port = open_stream('/dev/uart1/@Default/default', R | W)
+port = open_stream('/dev/uart1/@SerialPort/port', R | W)
+port = open_stream('/dev/uart1/@SerialPort/port()', R | W)
+port = open_rpc('/dev/uart1').port()
+
+# Equivalent
+call('/dev/uart1/@SerialPort/setBaud(9600)')
+open_rpc('/dev/uart1/@SerialPort').set_baud(9600)
+open_rpc('/dev/uart1', trait='SerialPort').set_baud(9600)
+open_rpc('/dev/uart1').set_baud(9600)
+open_rpc('/dev/uart1').baud = 9600
+
+# Example actions
+port.write('hello, world\n')
+data = port.read(8)
+
+# --------- Mount ops ---------
+@Trait(ident=0xdeadbeefcafebabe)
+class ExampleTrait(Trait):
+    @Method(ident=1)
+    def ping():
+        pass
+
+class ExampleImpl(ExampleTrait.impl):
+    def ping():
+        print('got ping!')
+
+dev_dir = IpcRoot.mount(name='dev', target=IpcDir())  # Returns ref
+serial_port = dev_dir.mount(name='pinger', target=ExampleImpl())
+
