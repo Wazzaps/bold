@@ -1,8 +1,10 @@
+#![allow(clippy::never_loop)]
+
 use crate::ipc;
 use crate::ipc::IpcNode;
 use crate::ktask;
 use crate::AsciiStr;
-use crate::{print, println, spawn_task};
+use crate::{queue_write, queue_writeln, spawn_task};
 use alloc::boxed::Box;
 use alloc::vec;
 use alloc::vec::Vec;
@@ -10,6 +12,7 @@ use futures::StreamExt;
 
 struct KShell {
     pub input: ipc::IpcRef,
+    pub output: ipc::IpcRef,
     pub root: ipc::IpcRef,
     pub cwd: Vec<u64>,
 }
@@ -30,13 +33,13 @@ impl KShell {
         let mut buf = Vec::new();
         let mut readline_cursor = 0usize;
 
-        fn rerender(buf: &[u8]) {
-            print!("\x1b[K");
+        fn rerender(output: &ipc::IpcRef, buf: &[u8]) {
+            queue_write!(output.clone(), "\x1b[K");
             for c in buf {
-                print!("{}", *c as char);
+                queue_write!(output.clone(), "{}", *c as char);
             }
             for _ in buf {
-                print!("\x08");
+                queue_write!(output.clone(), "\x08");
             }
         }
 
@@ -89,18 +92,18 @@ impl KShell {
             match c {
                 // Normal letters
                 b' '..=b'~' => {
-                    print!("{}", c as char);
+                    queue_write!(self.output.clone(), "{}", c as char);
                     buf.insert(readline_cursor, c);
                     readline_cursor += 1;
-                    rerender(&buf[readline_cursor..]);
+                    rerender(&self.output, &buf[readline_cursor..]);
                 }
                 // Backspace
                 0x7f | 0x08 => {
                     if readline_cursor > 0 {
                         buf.remove(readline_cursor - 1);
                         readline_cursor -= 1;
-                        print!("\x08 \x08");
-                        rerender(&buf[readline_cursor..]);
+                        queue_write!(self.output.clone(), "\x08 \x08");
+                        rerender(&self.output, &buf[readline_cursor..]);
                     }
                 }
                 // Delete word left
@@ -108,10 +111,10 @@ impl KShell {
                     let word_len = skip_word_left(&buf[..readline_cursor]);
                     for _ in 0..word_len {
                         buf.remove(readline_cursor - word_len);
-                        print!("\x08");
+                        queue_write!(self.output.clone(), "\x08");
                     }
                     readline_cursor -= word_len;
-                    rerender(&buf[readline_cursor..]);
+                    rerender(&self.output, &buf[readline_cursor..]);
                 }
                 // Escape sequence
                 0x1b => {
@@ -122,33 +125,33 @@ impl KShell {
                             match self.read_char().await {
                                 // Up and Down unsupported, ring bell
                                 b'A' | b'B' => {
-                                    print!("\x07");
+                                    queue_write!(self.output.clone(), "\x07");
                                 }
                                 // Left
                                 b'D' => {
                                     if readline_cursor != 0 {
                                         readline_cursor -= 1;
-                                        print!("\x1b[D");
+                                        queue_write!(self.output.clone(), "\x1b[D");
                                     }
                                 }
                                 // Right
                                 b'C' => {
                                     if readline_cursor < buf.len() {
                                         readline_cursor += 1;
-                                        print!("\x1b[C");
+                                        queue_write!(self.output.clone(), "\x1b[C");
                                     }
                                 }
                                 // Home
                                 b'H' => {
                                     for _ in 0..readline_cursor {
-                                        print!("\x1b[D");
+                                        queue_write!(self.output.clone(), "\x1b[D");
                                     }
                                     readline_cursor = 0;
                                 }
                                 // End
                                 b'F' => {
                                     for _ in readline_cursor..buf.len() {
-                                        print!("\x1b[C");
+                                        queue_write!(self.output.clone(), "\x1b[C");
                                     }
                                     readline_cursor = buf.len();
                                 }
@@ -158,31 +161,31 @@ impl KShell {
                                     b'~' => {
                                         if readline_cursor != buf.len() {
                                             buf.remove(readline_cursor);
-                                            rerender(&buf[readline_cursor..]);
+                                            rerender(&self.output, &buf[readline_cursor..]);
                                         }
                                     }
                                     c => {
-                                        print!("<{:02x}>", c);
+                                        queue_write!(self.output.clone(), "<{:02x}>", c);
                                     }
                                 },
                                 c => {
-                                    print!("<{:02x}>", c);
+                                    queue_write!(self.output.clone(), "<{:02x}>", c);
                                 }
                             }
                         }
                         c => {
-                            print!("<{:02x}>", c);
+                            queue_write!(self.output.clone(), "<{:02x}>", c);
                         }
                     }
                 }
                 // Newline
                 b'\r' | b'\n' => {
-                    print!("\r\n");
+                    queue_write!(self.output.clone(), "\r\n");
                     return buf;
                 }
                 // Unknown
                 _ => {
-                    print!("<{:02x}>", c);
+                    queue_write!(self.output.clone(), "<{:02x}>", c);
                 }
             };
         }
@@ -200,7 +203,7 @@ impl KShell {
         Some(root)
     }
 
-    fn parse_path(cwd: &[u64], path: &[u8]) -> Result<Vec<u64>, ()> {
+    fn parse_path(output: &ipc::IpcRef, cwd: &[u64], path: &[u8]) -> Result<Vec<u64>, ()> {
         let mut root = if path.starts_with(b"/") {
             vec![]
         } else {
@@ -216,7 +219,8 @@ impl KShell {
                 let as_str = core::str::from_utf8(&part[1..]).map_err(|_| ())?;
                 root.push(u64::from_str_radix(as_str, 16).map_err(|_| ())?);
             } else {
-                println!(
+                queue_writeln!(
+                    output.clone(),
                     "Error: Filenames unsupported in IPC namespace, Use /:1234/:cafe/ notation"
                 );
                 return Err(());
@@ -227,21 +231,24 @@ impl KShell {
     }
 
     pub async fn run(&mut self) {
-        println!("--- Bold KShell ---");
-        println!("Type `help` to see available commands");
+        queue_write!(self.output.clone(), "--- Bold KShell ---\n");
+        queue_write!(
+            self.output.clone(),
+            "Type `help` to see available commands\n"
+        );
         loop {
             // Draw prompt
-            print!("\x1b[32m");
-            print!("kernel");
-            print!("\x1b[0m");
-            print!("@bold ipc:");
-            print!("\x1b[32m");
-            print!("/");
+            queue_write!(self.output.clone(), "\x1b[32m");
+            queue_write!(self.output.clone(), "kernel");
+            queue_write!(self.output.clone(), "\x1b[0m");
+            queue_write!(self.output.clone(), "@bold ipc:");
+            queue_write!(self.output.clone(), "\x1b[32m");
+            queue_write!(self.output.clone(), "/");
             for dir in &self.cwd {
-                print!(":{:x}/", *dir);
+                queue_write!(self.output.clone(), ":{:x}/", *dir);
             }
-            print!("\x1b[0m");
-            print!("> ");
+            queue_write!(self.output.clone(), "\x1b[0m");
+            queue_write!(self.output.clone(), "> ");
 
             // Get components
             let line = &self.read_line().await;
@@ -252,24 +259,30 @@ impl KShell {
             if let Some(word) = words.first() {
                 match *word {
                     b"help" => {
-                        println!("help      : Print list of available commands");
-                        println!("ls <PATH> : List current directory");
-                        println!("cd <PATH> : Change directory");
+                        queue_writeln!(
+                            self.output.clone(),
+                            "help      : Print list of available commands"
+                        );
+                        queue_writeln!(self.output.clone(), "ls <PATH> : List current directory");
+                        queue_writeln!(self.output.clone(), "cd <PATH> : Change directory");
                     }
                     b"ls" => loop {
                         // Loops for a single iteration, just so we can break out
 
                         let path = match words.len() {
                             1 => self.cwd.clone(),
-                            2 => match KShell::parse_path(&self.cwd, words[1]) {
+                            2 => match KShell::parse_path(&self.output, &self.cwd, words[1]) {
                                 Ok(path) => path,
                                 Err(_) => {
-                                    println!("Error: Invalid Path");
+                                    queue_writeln!(self.output.clone(), "Error: Invalid Path");
                                     break;
                                 }
                             },
                             _ => {
-                                println!("Error: Invalid Usage, see `help`");
+                                queue_writeln!(
+                                    self.output.clone(),
+                                    "Error: Invalid Usage, see `help`"
+                                );
                                 break;
                             }
                         };
@@ -277,16 +290,19 @@ impl KShell {
                             if let IpcNode::Dir(_) = *cwd.inner {
                                 if let Some(mut stream) = cwd.dir_list() {
                                     while let Some(item) = stream.next().await {
-                                        println!("{:?}", item);
+                                        queue_writeln!(self.output.clone(), "{:?}", item);
                                     }
                                 } else {
-                                    println!("Error: Failed to list given path");
+                                    queue_writeln!(
+                                        self.output.clone(),
+                                        "Error: Failed to list given path"
+                                    );
                                 }
                             } else {
-                                println!("Error: Not a directory");
+                                queue_writeln!(self.output.clone(), "Error: Not a directory");
                             }
                         } else {
-                            println!("Error: Directory doesn't exist");
+                            queue_writeln!(self.output.clone(), "Error: Directory doesn't exist");
                         }
                         break;
                     },
@@ -295,15 +311,18 @@ impl KShell {
 
                         let path = match words.len() {
                             1 => vec![],
-                            2 => match KShell::parse_path(&self.cwd, words[1]) {
+                            2 => match KShell::parse_path(&self.output, &self.cwd, words[1]) {
                                 Ok(path) => path,
                                 Err(_) => {
-                                    println!("Error: Invalid Path");
+                                    queue_writeln!(self.output.clone(), "Error: Invalid Path");
                                     break;
                                 }
                             },
                             _ => {
-                                println!("Error: Invalid Usage, see `help`");
+                                queue_writeln!(
+                                    self.output.clone(),
+                                    "Error: Invalid Usage, see `help`"
+                                );
                                 break;
                             }
                         };
@@ -312,16 +331,20 @@ impl KShell {
                             if let IpcNode::Dir(_) = *given_dir.inner {
                                 self.cwd = path;
                             } else {
-                                println!("Error: Not a directory");
+                                queue_writeln!(self.output.clone(), "Error: Not a directory");
                             }
                         } else {
-                            println!("Error: Directory doesn't exist");
+                            queue_writeln!(self.output.clone(), "Error: Directory doesn't exist");
                         }
 
                         break;
                     },
                     _ => {
-                        println!("Error: Unknown command `{}`", AsciiStr(*word));
+                        queue_writeln!(
+                            self.output.clone(),
+                            "Error: Unknown command `{}`",
+                            AsciiStr(*word)
+                        );
                     }
                 };
             }
@@ -334,10 +357,12 @@ pub fn launch() {
         // Open the input queue
         let root = ipc::ROOT.read().as_ref().unwrap().clone();
         let input_queue = root.dir_get(0xcafe).await.unwrap();
+        let output_queue = root.dir_get(0xbabe).await.unwrap();
 
         // Create shell
         KShell {
             input: input_queue,
+            output: output_queue,
             root,
             cwd: vec![],
         }

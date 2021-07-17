@@ -5,8 +5,8 @@ use crate::arch::aarch64::mmio::{
 };
 use crate::driver_manager::{DeviceType, DriverInfo};
 use crate::file_interface::IoResult;
-use crate::spawn_task;
 use crate::{driver_manager, fi, ktask};
+use crate::{spawn_task, ErrWarn};
 use alloc::prelude::v1::Box;
 use alloc::sync::Arc;
 use async_trait::async_trait;
@@ -65,11 +65,35 @@ impl driver_manager::Driver for Driver {
                 .unwrap();
 
             // Write to it forever
+            let mut buf = [0u8; 1];
             loop {
-                let mut buf = [0u8; 1];
                 if let Ok(1) = fi::Read::read(&DEVICE, &mut buf).await {
-                    input_queue.queue_write(&buf).await;
+                    input_queue.queue_write(&buf).await.warn();
                 }
+                ktask::yield_now().await;
+            }
+        });
+
+        spawn_task!({
+            // Create the output queue
+            let root = crate::ipc::ROOT.read().as_ref().unwrap().clone();
+            let output_queue = root
+                .dir_link(
+                    0xbabe,
+                    Arc::new(crate::ipc::IpcNode::SpscQueue(
+                        crate::ipc::IpcSpscQueue::new(),
+                    )),
+                )
+                .await
+                .unwrap();
+
+            // Write to it forever
+            let mut buf = [0u8; 1];
+            loop {
+                if let Some(1) = output_queue.queue_read(&mut buf).await {
+                    fi::Write::write_all(&DEVICE, &buf).await.unwrap()
+                }
+                ktask::yield_now().await;
             }
         });
 

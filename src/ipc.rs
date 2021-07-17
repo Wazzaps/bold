@@ -96,13 +96,13 @@ impl<const S: usize> SpscQueue<S> {
 }
 
 pub struct IpcSpscQueue {
-    queue: Mutex<Box<SpscQueue<128>>>,
+    queue: Mutex<Box<SpscQueue<512>>>,
 }
 
 impl IpcSpscQueue {
     pub fn new() -> Self {
         Self {
-            queue: Mutex::new(Box::new(SpscQueue::<128>::new())),
+            queue: Mutex::new(Box::new(SpscQueue::<512>::new())),
         }
     }
 }
@@ -171,14 +171,28 @@ impl IpcRef {
         Some(new_ent)
     }
 
-    pub async fn queue_write(&self, data: &[u8]) -> Option<usize> {
+    pub async fn queue_write(&self, data: &[u8]) -> Result<usize, ()> {
         match self.inner.as_ref() {
-            IpcNode::SpscQueue(q) => Some(q.queue.lock().write(data)),
+            IpcNode::SpscQueue(q) => Ok(q.queue.lock().write(data)),
             // IpcNode::SpmcQueue => {}
             // IpcNode::MpscQueue => {}
             // IpcNode::MpmcQueue => {}
-            _ => None,
+            _ => Err(()),
         }
+    }
+
+    pub async fn queue_write_all(&self, mut data: &[u8]) -> Result<(), ()> {
+        let mut left = data.len();
+        while left > 0 {
+            let newly_written = self.queue_write(data).await?;
+            if newly_written == 0 {
+                // EOF
+                return Err(());
+            }
+            data = &data[newly_written..];
+            left -= newly_written;
+        }
+        Ok(())
     }
 
     pub async fn queue_read(&self, dest: &mut [u8]) -> Option<usize> {
@@ -282,7 +296,7 @@ pub async fn test() {
     }
 
     // Test spsc
-    // let mut q = SpscQueue::<128>::new();
+    // let mut q = SpscQueue::<512>::new();
     // assert_eq!(q.read(1), b"");
     // assert_eq!(q.read(128), b"");
     // assert_eq!(q.read(256), b"");

@@ -1,6 +1,9 @@
 use crate::driver_manager::{drivers, DeviceType};
-use crate::fi;
 use crate::println;
+use crate::{fi, ktask};
+use crate::{ipc, ErrWarn};
+use alloc::boxed::Box;
+use alloc::string::ToString;
 use core::fmt;
 use core::fmt::Formatter;
 use core::mem::size_of;
@@ -29,8 +32,21 @@ macro_rules! print {
 /// Like the `println!` macro in the standard library, but prints to the UART.
 #[macro_export]
 macro_rules! println {
-    () => ($crate::print!("\n"));
+    () => ($crate::print!("\r\n"));
     ($($arg:tt)*) => ($crate::print!("{}\r\n", format_args!($($arg)*)));
+}
+
+/// Like the `write!` macro in the standard library, but prints to the queue.
+#[macro_export]
+macro_rules! queue_write {
+    ($fmt: expr, $($arg:tt)*) => ($crate::console::_print_queue($fmt, format_args!($($arg)*)));
+}
+
+/// Like the `writeln!` macro in the standard library, but prints to the queue.
+#[macro_export]
+macro_rules! queue_writeln {
+    ($fmt: expr) => ($crate::queue_write!($fmt, "\r\n"));
+    ($fmt: expr, $($arg:tt)*) => ($crate::queue_write!($fmt, "{}\r\n", format_args!($($arg)*)));
 }
 
 struct FmtWriteAdapter<'a>(&'a (dyn fi::SyncWrite));
@@ -50,6 +66,32 @@ pub fn _print(args: fmt::Arguments) {
         // Ignore return code
         let _ = FmtWriteAdapter(console.sync_write.unwrap()).write_fmt(args);
     }
+}
+
+struct FmtQueueWriteAdapter(ipc::IpcRef);
+
+impl fmt::Write for FmtQueueWriteAdapter {
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        let queue = self.0.clone();
+        let s = s.to_string();
+        ktask::SimpleExecutor::run_blocking(ktask::Task::new_raw(Box::pin(async move {
+            queue
+                .queue_write_all(s.as_bytes())
+                .await
+                .map_err(|_| fmt::Error)
+                .warn();
+        })));
+        Ok(())
+    }
+}
+
+/// Prints the given formatted string to the queue.
+#[doc(hidden)]
+pub fn _print_queue(queue: ipc::IpcRef, args: fmt::Arguments) {
+    use core::fmt::Write;
+
+    // Ignore return code
+    let _ = FmtQueueWriteAdapter(queue).write_fmt(args);
 }
 
 pub fn dump_hex<T>(val: &T) {
