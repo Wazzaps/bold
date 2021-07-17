@@ -11,20 +11,20 @@ use spin::{Mutex, RwLock};
 
 #[derive(Clone)]
 pub struct IpcRef {
-    id: u64,
-    inner: Arc<IpcNode>,
+    pub id: u64,
+    pub inner: Arc<IpcNode>,
 }
 
 impl Debug for IpcRef {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self.inner.as_ref() {
-            IpcNode::Dir(_) => write!(f, "IpcNode::Dir#{:x}", self.id),
-            IpcNode::SpscQueue(_) => write!(f, "IpcNode::SpscQueue#{:x}", self.id),
-            IpcNode::SpmcQueue => write!(f, "IpcNode::SpmcQueue#{:x}", self.id),
-            IpcNode::MpscQueue => write!(f, "IpcNode::MpscQueue#{:x}", self.id),
-            IpcNode::MpmcQueue => write!(f, "IpcNode::MpmcQueue#{:x}", self.id),
-            IpcNode::Blob => write!(f, "IpcNode::Blob#{:x}", self.id),
-            IpcNode::Endpoint => write!(f, "IpcNode::Endpoint#{:x}", self.id),
+            IpcNode::Dir(_) => write!(f, ":{:x}:Dir", self.id),
+            IpcNode::SpscQueue(_) => write!(f, ":{:x}:SpscQueue", self.id),
+            IpcNode::SpmcQueue => write!(f, ":{:x}:SpmcQueue", self.id),
+            IpcNode::MpscQueue => write!(f, ":{:x}:MpscQueue", self.id),
+            IpcNode::MpmcQueue => write!(f, ":{:x}:MpmcQueue", self.id),
+            IpcNode::Blob => write!(f, ":{:x}:Blob", self.id),
+            IpcNode::Endpoint => write!(f, ":{:x}:Endpoint", self.id),
         }
     }
 }

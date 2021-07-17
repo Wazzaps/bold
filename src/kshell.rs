@@ -1,20 +1,20 @@
 use crate::ipc;
+use crate::ipc::IpcNode;
 use crate::ktask;
 use crate::AsciiStr;
 use crate::{print, println, spawn_task};
 use alloc::boxed::Box;
+use alloc::vec;
 use alloc::vec::Vec;
+use futures::StreamExt;
 
 struct KShell {
-    input: ipc::IpcRef,
+    pub input: ipc::IpcRef,
+    pub root: ipc::IpcRef,
+    pub cwd: Vec<u64>,
 }
 
 impl KShell {
-    pub fn new(input: ipc::IpcRef) -> Self {
-        println!("--- Bold KShell ---");
-        Self { input }
-    }
-
     pub async fn read_char(&mut self) -> u8 {
         let mut buf = [0u8; 1];
         loop {
@@ -188,20 +188,142 @@ impl KShell {
         }
     }
 
+    async fn navigate_to_path(&mut self, path: &[u64]) -> Option<ipc::IpcRef> {
+        let mut root = self.root.clone();
+        for part in path {
+            root = match root.dir_get(*part).await {
+                Some(new_root) => new_root,
+                None => return None,
+            }
+        }
+
+        Some(root)
+    }
+
+    fn parse_path(cwd: &[u64], path: &[u8]) -> Result<Vec<u64>, ()> {
+        let mut root = if path.starts_with(b"/") {
+            vec![]
+        } else {
+            cwd.to_vec()
+        };
+
+        for part in path.split(|c| *c == b'/') {
+            if part == b"." || part == b"" {
+                // Do nothing
+            } else if part == b".." {
+                root.pop();
+            } else if part.starts_with(b":") {
+                let as_str = core::str::from_utf8(&part[1..]).map_err(|_| ())?;
+                root.push(u64::from_str_radix(as_str, 16).map_err(|_| ())?);
+            } else {
+                println!(
+                    "Error: Filenames unsupported in IPC namespace, Use /:1234/:cafe/ notation"
+                );
+                return Err(());
+            }
+        }
+
+        Ok(root)
+    }
+
     pub async fn run(&mut self) {
+        println!("--- Bold KShell ---");
+        println!("Type `help` to see available commands");
         loop {
+            // Draw prompt
             print!("\x1b[32m");
             print!("kernel");
             print!("\x1b[0m");
-            print!("@bold ");
+            print!("@bold ipc:");
             print!("\x1b[32m");
             print!("/");
+            for dir in &self.cwd {
+                print!(":{:x}/", *dir);
+            }
             print!("\x1b[0m");
-            print!("# ");
-            let line = &self.read_line().await;
+            print!("> ");
+
             // Get components
-            for word in line.split(|c| *c == b' ').filter(|s| s != b"") {
-                println!("[{}]", AsciiStr(word));
+            let line = &self.read_line().await;
+            let words = line
+                .split(|c| *c == b' ')
+                .filter(|s| s != b"")
+                .collect::<Vec<_>>();
+            if let Some(word) = words.first() {
+                match *word {
+                    b"help" => {
+                        println!("help      : Print list of available commands");
+                        println!("ls <PATH> : List current directory");
+                        println!("cd <PATH> : Change directory");
+                    }
+                    b"ls" => loop {
+                        // Loops for a single iteration, just so we can break out
+
+                        let path = match words.len() {
+                            1 => self.cwd.clone(),
+                            2 => match KShell::parse_path(&self.cwd, words[1]) {
+                                Ok(path) => path,
+                                Err(_) => {
+                                    println!("Error: Invalid Path");
+                                    break;
+                                }
+                            },
+                            _ => {
+                                println!("Error: Invalid Usage, see `help`");
+                                break;
+                            }
+                        };
+                        if let Some(cwd) = self.navigate_to_path(&path).await {
+                            if let IpcNode::Dir(_) = *cwd.inner {
+                                if let Some(mut stream) = cwd.dir_list() {
+                                    while let Some(item) = stream.next().await {
+                                        println!("{:?}", item);
+                                    }
+                                } else {
+                                    println!("Error: Failed to list given path");
+                                }
+                            } else {
+                                println!("Error: Not a directory");
+                            }
+                        } else {
+                            println!("Error: Directory doesn't exist");
+                        }
+                        break;
+                    },
+                    b"cd" => loop {
+                        // Loops for a single iteration, just so we can break out
+
+                        let path = match words.len() {
+                            1 => vec![],
+                            2 => match KShell::parse_path(&self.cwd, words[1]) {
+                                Ok(path) => path,
+                                Err(_) => {
+                                    println!("Error: Invalid Path");
+                                    break;
+                                }
+                            },
+                            _ => {
+                                println!("Error: Invalid Usage, see `help`");
+                                break;
+                            }
+                        };
+
+                        if let Some(given_dir) = self.navigate_to_path(&path).await {
+                            if let IpcNode::Dir(_) = *given_dir.inner {
+                                self.cwd = path;
+                            } else {
+                                println!("Error: Not a directory");
+                            }
+                        } else {
+                            println!("Error: Directory doesn't exist");
+                        }
+
+                        break;
+                    },
+                    _ => {
+                        println!("Error: Unknown command `{}`", AsciiStr(*word));
+                    }
+                };
             }
         }
     }
@@ -214,6 +336,12 @@ pub fn launch() {
         let input_queue = root.dir_get(0xcafe).await.unwrap();
 
         // Create shell
-        KShell::new(input_queue).run().await
+        KShell {
+            input: input_queue,
+            root,
+            cwd: vec![],
+        }
+        .run()
+        .await
     });
 }
