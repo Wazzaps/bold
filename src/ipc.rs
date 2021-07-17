@@ -10,7 +10,7 @@ use futures::{stream, StreamExt};
 use spin::{Mutex, RwLock};
 
 #[derive(Clone)]
-struct IpcRef {
+pub struct IpcRef {
     id: u64,
     inner: Arc<IpcNode>,
 }
@@ -29,7 +29,7 @@ impl Debug for IpcRef {
     }
 }
 
-enum IpcNode {
+pub enum IpcNode {
     Dir(IpcDir),
     SpscQueue(IpcSpscQueue),
     SpmcQueue,
@@ -39,11 +39,11 @@ enum IpcNode {
     Endpoint,
 }
 
-struct IpcDir {
+pub struct IpcDir {
     entries: RwLock<Vec<IpcRef>>,
 }
 
-struct SpscQueue<const S: usize> {
+pub struct SpscQueue<const S: usize> {
     buffer: [u8; S],
     read_head: usize,
     write_head: usize,
@@ -71,7 +71,7 @@ impl<const S: usize> SpscQueue<S> {
                     .copy_from_slice(&data[cutoff..write_size]);
             } else {
                 // Fits in single write
-                (&mut self.buffer[self.write_head..self.write_head + write_size])
+                (&mut self.buffer[self.write_head % S..self.write_head % S + write_size])
                     .copy_from_slice(&data[..write_size]);
             }
             self.write_head += write_size;
@@ -90,13 +90,21 @@ impl<const S: usize> SpscQueue<S> {
         } else {
             // Fits in single read
             self.read_head = read_target;
-            &self.buffer[read_head % S..read_target % S]
+            &self.buffer[read_head % S..(read_head % S) + read_target - read_head]
         }
     }
 }
 
-struct IpcSpscQueue {
+pub struct IpcSpscQueue {
     queue: Mutex<Box<SpscQueue<128>>>,
+}
+
+impl IpcSpscQueue {
+    pub fn new() -> Self {
+        Self {
+            queue: Mutex::new(Box::new(SpscQueue::<128>::new())),
+        }
+    }
 }
 
 impl IpcRef {
@@ -173,9 +181,14 @@ impl IpcRef {
         }
     }
 
-    pub async fn queue_read(&self, amount: usize) -> Option<Vec<u8>> {
+    pub async fn queue_read(&self, dest: &mut [u8]) -> Option<usize> {
         match self.inner.as_ref() {
-            IpcNode::SpscQueue(q) => Some(q.queue.lock().read(amount).to_vec()),
+            IpcNode::SpscQueue(q) => {
+                let mut queue = q.queue.lock();
+                let result = queue.read(dest.len());
+                (&mut dest[..result.len()]).copy_from_slice(result);
+                Some(result.len())
+            }
             // IpcNode::SpmcQueue => {}
             // IpcNode::MpscQueue => {}
             // IpcNode::MpmcQueue => {}
@@ -207,9 +220,7 @@ pub fn init() {
                             },
                             IpcRef {
                                 id: 3,
-                                inner: Arc::new(IpcNode::SpscQueue(IpcSpscQueue {
-                                    queue: Mutex::new(Box::new(SpscQueue::<128>::new())),
-                                })),
+                                inner: Arc::new(IpcNode::SpscQueue(IpcSpscQueue::new())),
                             },
                         ]),
                     })),
@@ -265,7 +276,9 @@ pub async fn test() {
     // Read from spsc
     {
         let queue = dir1.dir_get(3).await.unwrap();
-        assert_eq!(queue.queue_read(5).await.unwrap(), b"Hello");
+        let mut res = [0u8; 5];
+        assert_eq!(queue.queue_read(&mut res).await.unwrap(), 5);
+        assert_eq!(&res, b"Hello");
     }
 
     // Test spsc
@@ -285,4 +298,4 @@ pub async fn test() {
     // assert_eq!(q.read(128), s_8);
 }
 
-static ROOT: RwLock<Option<IpcRef>> = RwLock::new(None);
+pub static ROOT: RwLock<Option<IpcRef>> = RwLock::new(None);

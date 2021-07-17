@@ -22,6 +22,7 @@ pub(crate) mod driver_manager;
 mod file_interface;
 pub(crate) mod framebuffer;
 pub(crate) mod ipc;
+mod kshell;
 pub(crate) mod ktask;
 mod lang_items;
 pub(crate) mod utils;
@@ -78,6 +79,9 @@ pub unsafe extern "C" fn kmain(dtb_addr: *const u8) {
         virtmem::init(kernel_virtmem);
     }
 
+    // IPC
+    ipc::init();
+
     // Start kernel tasks
     ktask::init();
 
@@ -87,9 +91,10 @@ pub unsafe extern "C" fn kmain(dtb_addr: *const u8) {
     println!("--- Bold Kernel v{} ---", env!("CARGO_PKG_VERSION"));
     println!("[INFO] Early console working");
 
-    // IPC
-    ipc::init();
-    ktask::SimpleExecutor::run_blocking(ktask::Task::new_raw(Box::pin(ipc::test())));
+    // IPC test
+    // ktask::SimpleExecutor::run_blocking(ktask::Task::new_raw(Box::pin(ipc::test())));
+
+    kshell::launch();
 
     println!("[DBUG] virt2phy tests:");
     for addr in [
@@ -141,10 +146,10 @@ pub unsafe extern "C" fn kmain(dtb_addr: *const u8) {
     println!("[INFO] Loaded drivers: {:?}", driver_manager::drivers());
 
     // Initialize main console, currently same as early-con
-    println!("[INFO] Initializing main console");
-    driver_manager::init_driver_by_name(b"Raspberry Pi 3 UART1").warn();
-    console::set_main_console_by_name(b"Raspberry Pi 3 UART1");
-    println!("[INFO] Main console working");
+    // println!("[INFO] Initializing main console");
+    // driver_manager::init_driver_by_name(b"Raspberry Pi 3 UART1").warn();
+    // console::set_main_console_by_name(b"Raspberry Pi 3 UART1");
+    // println!("[INFO] Main console working");
 
     // Get kernel command line
     let args = mailbox_methods::get_kernel_args().unwrap();

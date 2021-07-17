@@ -5,8 +5,10 @@ use crate::arch::aarch64::mmio::{
 };
 use crate::driver_manager::{DeviceType, DriverInfo};
 use crate::file_interface::IoResult;
+use crate::spawn_task;
 use crate::{driver_manager, fi, ktask};
 use alloc::prelude::v1::Box;
+use alloc::sync::Arc;
 use async_trait::async_trait;
 use core::cell::UnsafeCell;
 use spin::RwLock;
@@ -48,6 +50,29 @@ impl driver_manager::Driver for Driver {
         unsafe {
             (*self.info.get()).initialized = true;
         }
+
+        spawn_task!({
+            // Create the input queue
+            let root = crate::ipc::ROOT.read().as_ref().unwrap().clone();
+            let input_queue = root
+                .dir_link(
+                    0xcafe,
+                    Arc::new(crate::ipc::IpcNode::SpscQueue(
+                        crate::ipc::IpcSpscQueue::new(),
+                    )),
+                )
+                .await
+                .unwrap();
+
+            // Write to it forever
+            loop {
+                let mut buf = [0u8; 1];
+                if let Ok(1) = fi::Read::read(&DEVICE, &mut buf).await {
+                    input_queue.queue_write(&buf).await;
+                }
+            }
+        });
+
         Ok(())
     }
 
