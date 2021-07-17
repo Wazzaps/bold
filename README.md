@@ -9,6 +9,10 @@ Mix of:
 - `https://wiki.osdev.org/Raspberry_Pi_Bare_Bones`
 - My ideas
 
+## Screenshot
+
+![Screenshot](https://i.ibb.co/YQqhQHH/Screenshot-from-2021-07-18-01-43-15.png)
+
 ## Development environment (linux) - with GUI
 
 - Install dependencies:
@@ -56,7 +60,7 @@ Mix of:
 - [ ] Cooperative multi-tasking for kernel tasks
     - [x] Naive executor
     - [x] Async-ify `FileInterface`
-    - [ ] Maybe Stream-ify `FileInterface`?
+    - [x] Maybe Stream-ify `FileInterface`?
     - [ ] Proper executor
 - [x] Read from SDHC card
 - [x] Print kernel argv
@@ -70,7 +74,7 @@ Mix of:
 - [ ] Run code in EL0 (usermode)
 - [ ] Paging for usermode
 - [ ] FAT32 driver
-- [ ] IPC layer
+- [x] IPC layer (basic)
 - [ ] VFS layer?
 - [ ] Simple Bluetooth
 - [ ] Power management for RPI3
