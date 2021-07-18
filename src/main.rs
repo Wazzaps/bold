@@ -20,7 +20,9 @@ pub(crate) mod arch;
 pub(crate) mod console;
 pub(crate) mod driver_manager;
 mod file_interface;
+pub(crate) mod fonts;
 pub(crate) mod framebuffer;
+pub(crate) mod framebuffer_textmode;
 pub(crate) mod ipc;
 mod kshell;
 pub(crate) mod ktask;
@@ -35,21 +37,6 @@ use core::ops::Deref;
 use core::ptr::slice_from_raw_parts;
 pub(crate) use file_interface as fi;
 pub(crate) use utils::*;
-
-async fn vsync<F, Fut>(mut f: F)
-where
-    F: FnMut() -> Fut,
-    Fut: core::future::Future<Output = ()>,
-{
-    let start = get_uptime_us();
-    (f)().await;
-    let end = get_uptime_us();
-    if end < start + 16666 {
-        delay_us(16666 - (end - start)).await;
-    } else {
-        yield_now().await;
-    }
-}
 
 #[inline(always)]
 unsafe fn syscall1(num: usize, mut arg1: usize) -> usize {
@@ -175,24 +162,7 @@ pub unsafe extern "C" fn kmain(dtb_addr: *const u8) {
     // println!("[INFO] Today's lucky number: {}", lucky_number);
 
     // Draw something
-    spawn_task!({
-        println!("[INFO] Drawing something");
-        let framebuffer = driver_manager::device_by_type(DeviceType::Framebuffer)
-            .unwrap()
-            .ctrl
-            .unwrap();
-        let mut i = 0;
-        loop {
-            vsync(async || {
-                framebuffer
-                    .call(framebuffer::FramebufferCM::DrawExample { variant: i })
-                    .await
-                    .warn();
-            })
-            .await;
-            i += 1;
-        }
-    });
+    framebuffer_textmode::init();
 
     // Spawn some more tasks
     async fn example_task(id: usize) {

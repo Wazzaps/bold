@@ -1,0 +1,1 @@
+- fonts in this folder (`ISO88591-8x16.png`, `iso-8x16.png`, and `tremolo-8x16.png` are from [https://github.com/epto/epto-fonts](https://github.com/epto/epto-fonts).

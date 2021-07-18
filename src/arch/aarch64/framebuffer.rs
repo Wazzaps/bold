@@ -120,6 +120,35 @@ impl fi::Control for Device {
                     }
                 }
             }
+            FramebufferCM::DrawChar {
+                font,
+                char,
+                row,
+                col,
+            } => {
+                let fb_info = unsafe { (&FB_INFO as *const FramebufferInfo).read_volatile() };
+                let fb: *mut u8 = (fb_info.pointer & 0x3FFFFFFF) as usize as *mut u8;
+                let width = fb_info.width;
+                let height = fb_info.height;
+                let pitch = fb_info.pitch;
+
+                if !fb.is_null() {
+                    let char = char as usize;
+                    let char = font[char * 8 * 16 * 3..(char + 1) * 8 * 16 * 3].as_ptr();
+
+                    for y in 0..16 {
+                        unsafe {
+                            let dst = fb.offset(
+                                (row as isize * 16 + y) * (pitch as isize) + col as isize * 8 * 3,
+                            );
+                            let src = char.offset(y * 8 * 3);
+                            for x in 0..(8 * 3) {
+                                dst.offset(x).write_volatile(*src.offset(x));
+                            }
+                        }
+                    }
+                }
+            }
         }
         Ok(())
     }
