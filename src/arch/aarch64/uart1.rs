@@ -56,7 +56,7 @@ impl driver_manager::Driver for Driver {
             let root = crate::ipc::ROOT.read().as_ref().unwrap().clone();
             let input_queue = root
                 .dir_link(
-                    0xcafe,
+                    0xcafe0,
                     Arc::new(crate::ipc::IpcNode::SpscQueue(
                         crate::ipc::IpcSpscQueue::new(),
                     )),
@@ -79,7 +79,7 @@ impl driver_manager::Driver for Driver {
             let root = crate::ipc::ROOT.read().as_ref().unwrap().clone();
             let output_queue = root
                 .dir_link(
-                    0xbabe,
+                    0xbabe0,
                     Arc::new(crate::ipc::IpcNode::SpscQueue(
                         crate::ipc::IpcSpscQueue::new(),
                     )),

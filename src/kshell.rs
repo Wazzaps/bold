@@ -1,10 +1,10 @@
 #![allow(clippy::never_loop)]
 
-use crate::ipc;
 use crate::ipc::IpcNode;
 use crate::ktask;
 use crate::AsciiStr;
-use crate::{queue_write, queue_writeln, spawn_task};
+use crate::{fonts, ipc};
+use crate::{println, queue_write, queue_writeln, spawn_task};
 use alloc::boxed::Box;
 use alloc::vec;
 use alloc::vec::Vec;
@@ -15,6 +15,7 @@ struct KShell {
     pub output: ipc::IpcRef,
     pub root: ipc::IpcRef,
     pub cwd: Vec<u64>,
+    pub colors: bool,
 }
 
 impl KShell {
@@ -238,16 +239,24 @@ impl KShell {
         );
         loop {
             // Draw prompt
-            queue_write!(self.output.clone(), "\x1b[32m");
+            if self.colors {
+                queue_write!(self.output.clone(), "\x1b[32m");
+            }
             queue_write!(self.output.clone(), "kernel");
-            queue_write!(self.output.clone(), "\x1b[0m");
+            if self.colors {
+                queue_write!(self.output.clone(), "\x1b[0m");
+            }
             queue_write!(self.output.clone(), "@bold ipc:");
-            queue_write!(self.output.clone(), "\x1b[32m");
+            if self.colors {
+                queue_write!(self.output.clone(), "\x1b[32m");
+            }
             queue_write!(self.output.clone(), "/");
             for dir in &self.cwd {
                 queue_write!(self.output.clone(), ":{:x}/", *dir);
             }
-            queue_write!(self.output.clone(), "\x1b[0m");
+            if self.colors {
+                queue_write!(self.output.clone(), "\x1b[0m");
+            }
             queue_write!(self.output.clone(), "> ");
 
             // Get components
@@ -261,84 +270,15 @@ impl KShell {
                     b"help" => {
                         queue_writeln!(
                             self.output.clone(),
-                            "help      : Print list of available commands"
+                            "help        : Print list of available commands\n\
+                             ls <PATH>   : List current directory\n\
+                             cd <PATH>   : Change directory\n\
+                             font <FONT> : Change framebuffer font"
                         );
-                        queue_writeln!(self.output.clone(), "ls <PATH> : List current directory");
-                        queue_writeln!(self.output.clone(), "cd <PATH> : Change directory");
                     }
-                    b"ls" => loop {
-                        // Loops for a single iteration, just so we can break out
-
-                        let path = match words.len() {
-                            1 => self.cwd.clone(),
-                            2 => match KShell::parse_path(&self.output, &self.cwd, words[1]) {
-                                Ok(path) => path,
-                                Err(_) => {
-                                    queue_writeln!(self.output.clone(), "Error: Invalid Path");
-                                    break;
-                                }
-                            },
-                            _ => {
-                                queue_writeln!(
-                                    self.output.clone(),
-                                    "Error: Invalid Usage, see `help`"
-                                );
-                                break;
-                            }
-                        };
-                        if let Some(cwd) = self.navigate_to_path(&path).await {
-                            if let IpcNode::Dir(_) = *cwd.inner {
-                                if let Some(mut stream) = cwd.dir_list() {
-                                    while let Some(item) = stream.next().await {
-                                        queue_writeln!(self.output.clone(), "{:?}", item);
-                                    }
-                                } else {
-                                    queue_writeln!(
-                                        self.output.clone(),
-                                        "Error: Failed to list given path"
-                                    );
-                                }
-                            } else {
-                                queue_writeln!(self.output.clone(), "Error: Not a directory");
-                            }
-                        } else {
-                            queue_writeln!(self.output.clone(), "Error: Directory doesn't exist");
-                        }
-                        break;
-                    },
-                    b"cd" => loop {
-                        // Loops for a single iteration, just so we can break out
-
-                        let path = match words.len() {
-                            1 => vec![],
-                            2 => match KShell::parse_path(&self.output, &self.cwd, words[1]) {
-                                Ok(path) => path,
-                                Err(_) => {
-                                    queue_writeln!(self.output.clone(), "Error: Invalid Path");
-                                    break;
-                                }
-                            },
-                            _ => {
-                                queue_writeln!(
-                                    self.output.clone(),
-                                    "Error: Invalid Usage, see `help`"
-                                );
-                                break;
-                            }
-                        };
-
-                        if let Some(given_dir) = self.navigate_to_path(&path).await {
-                            if let IpcNode::Dir(_) = *given_dir.inner {
-                                self.cwd = path;
-                            } else {
-                                queue_writeln!(self.output.clone(), "Error: Not a directory");
-                            }
-                        } else {
-                            queue_writeln!(self.output.clone(), "Error: Directory doesn't exist");
-                        }
-
-                        break;
-                    },
+                    b"ls" => self.handle_cmd_ls(&words).await,
+                    b"cd" => self.handle_cmd_cd(&words).await,
+                    b"font" => self.handle_cmd_font(&words).await,
                     _ => {
                         queue_writeln!(
                             self.output.clone(),
@@ -350,14 +290,103 @@ impl KShell {
             }
         }
     }
+
+    async fn handle_cmd_ls(&mut self, words: &Vec<&[u8]>) {
+        loop {
+            // Loops for a single iteration, just so we can break out
+
+            let path = match words.len() {
+                1 => self.cwd.clone(),
+                2 => match KShell::parse_path(&self.output, &self.cwd, words[1]) {
+                    Ok(path) => path,
+                    Err(_) => {
+                        queue_writeln!(self.output.clone(), "Error: Invalid Path");
+                        break;
+                    }
+                },
+                _ => {
+                    queue_writeln!(self.output.clone(), "Error: Invalid Usage, see `help`");
+                    break;
+                }
+            };
+            if let Some(cwd) = self.navigate_to_path(&path).await {
+                if let IpcNode::Dir(_) = *cwd.inner {
+                    if let Some(mut stream) = cwd.dir_list() {
+                        while let Some(item) = stream.next().await {
+                            queue_writeln!(self.output.clone(), "{:?}", item);
+                        }
+                    } else {
+                        queue_writeln!(self.output.clone(), "Error: Failed to list given path");
+                    }
+                } else {
+                    queue_writeln!(self.output.clone(), "Error: Not a directory");
+                }
+            } else {
+                queue_writeln!(self.output.clone(), "Error: Directory doesn't exist");
+            }
+            break;
+        }
+    }
+
+    async fn handle_cmd_font(&mut self, words: &Vec<&[u8]>) {
+        if words.len() != 2 {
+            queue_writeln!(
+                self.output.clone(),
+                "Usage: font <vga|terminus|thin|round|tremolo>"
+            );
+            return;
+        }
+
+        let font;
+        font = match words[1] {
+            b"vga" => fonts::VGA,
+            b"terminus" => fonts::TERMINUS,
+            b"thin" => fonts::ISO,
+            b"round" => fonts::ISO88591,
+            b"tremolo" => fonts::TREMOLO,
+            _ => {
+                queue_writeln!(self.output.clone(), "Unknown font");
+                return;
+            }
+        };
+        crate::framebuffer_console::set_font(font);
+    }
+
+    async fn handle_cmd_cd(&mut self, words: &Vec<&[u8]>) {
+        let path = match words.len() {
+            1 => vec![],
+            2 => match KShell::parse_path(&self.output, &self.cwd, words[1]) {
+                Ok(path) => path,
+                Err(_) => {
+                    queue_writeln!(self.output.clone(), "Error: Invalid Path");
+                    return;
+                }
+            },
+            _ => {
+                queue_writeln!(self.output.clone(), "Error: Invalid Usage, see `help`");
+                return;
+            }
+        };
+
+        if let Some(given_dir) = self.navigate_to_path(&path).await {
+            if let IpcNode::Dir(_) = *given_dir.inner {
+                self.cwd = path;
+            } else {
+                queue_writeln!(self.output.clone(), "Error: Not a directory");
+            }
+        } else {
+            queue_writeln!(self.output.clone(), "Error: Directory doesn't exist");
+        }
+    }
 }
 
-pub fn launch() {
+pub fn launch(in_id: u64, out_id: u64, colors: bool) {
+    println!("[INFO] Starting kshell for {:x}:{:x}", in_id, out_id);
     spawn_task!({
         // Open the input queue
         let root = ipc::ROOT.read().as_ref().unwrap().clone();
-        let input_queue = root.dir_get(0xcafe).await.unwrap();
-        let output_queue = root.dir_get(0xbabe).await.unwrap();
+        let input_queue = root.dir_get(in_id).await.unwrap();
+        let output_queue = root.dir_get(out_id).await.unwrap();
 
         // Create shell
         KShell {
@@ -365,6 +394,7 @@ pub fn launch() {
             output: output_queue,
             root,
             cwd: vec![],
+            colors,
         }
         .run()
         .await

@@ -128,8 +128,6 @@ impl fi::Control for Device {
             } => {
                 let fb_info = unsafe { (&FB_INFO as *const FramebufferInfo).read_volatile() };
                 let fb: *mut u8 = (fb_info.pointer & 0x3FFFFFFF) as usize as *mut u8;
-                let width = fb_info.width;
-                let height = fb_info.height;
                 let pitch = fb_info.pitch;
 
                 if !fb.is_null() {

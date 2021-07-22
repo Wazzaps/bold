@@ -22,7 +22,7 @@ pub(crate) mod driver_manager;
 mod file_interface;
 pub(crate) mod fonts;
 pub(crate) mod framebuffer;
-pub(crate) mod framebuffer_textmode;
+pub(crate) mod framebuffer_console;
 pub(crate) mod ipc;
 mod kshell;
 pub(crate) mod ktask;
@@ -80,8 +80,6 @@ pub unsafe extern "C" fn kmain(dtb_addr: *const u8) {
 
     // IPC test
     // ktask::SimpleExecutor::run_blocking(ktask::Task::new_raw(Box::pin(ipc::test())));
-
-    kshell::launch();
 
     println!("[DBUG] virt2phy tests:");
     for addr in [
@@ -162,7 +160,7 @@ pub unsafe extern "C" fn kmain(dtb_addr: *const u8) {
     // println!("[INFO] Today's lucky number: {}", lucky_number);
 
     // Draw something
-    framebuffer_textmode::init();
+    framebuffer_console::init();
 
     // Spawn some more tasks
     async fn example_task(id: usize) {
@@ -203,6 +201,9 @@ pub unsafe extern "C" fn kmain(dtb_addr: *const u8) {
     // sdhc.write_block(0, &buf).unwrap();
     // sdhc.read_block(0, &mut buf).unwrap();
     // assert_eq!(buf[0], 0xdeadbeef);
+
+    kshell::launch(0xcafe0, 0xbabe0, true);
+    kshell::launch(0xcafe1, 0xbabe1, false);
 
     ktask::run();
 
