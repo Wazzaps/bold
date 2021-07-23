@@ -18,13 +18,13 @@ pub struct IpcRef {
 impl Debug for IpcRef {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self.inner.as_ref() {
-            IpcNode::Dir(_) => write!(f, ":{:x}:Dir", self.id),
-            IpcNode::SpscQueue(_) => write!(f, ":{:x}:SpscQueue", self.id),
-            IpcNode::SpmcQueue => write!(f, ":{:x}:SpmcQueue", self.id),
-            IpcNode::MpscQueue => write!(f, ":{:x}:MpscQueue", self.id),
-            IpcNode::MpmcQueue => write!(f, ":{:x}:MpmcQueue", self.id),
-            IpcNode::Blob => write!(f, ":{:x}:Blob", self.id),
-            IpcNode::Endpoint => write!(f, ":{:x}:Endpoint", self.id),
+            IpcNode::Dir(_) => write!(f, " DIR {:x}", self.id),
+            IpcNode::SpscQueue(_) => write!(f, "SPSC {:x}", self.id),
+            IpcNode::SpmcQueue => write!(f, "SPMC {:x}", self.id),
+            IpcNode::MpscQueue => write!(f, "MPSC {:x}", self.id),
+            IpcNode::MpmcQueue => write!(f, "MPMC {:x}", self.id),
+            IpcNode::Blob => write!(f, "BLOB {:x}", self.id),
+            IpcNode::Endpoint => write!(f, "ENDP {:x}", self.id),
         }
     }
 }

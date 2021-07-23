@@ -216,15 +216,9 @@ impl KShell {
                 // Do nothing
             } else if part == b".." {
                 root.pop();
-            } else if part.starts_with(b":") {
-                let as_str = core::str::from_utf8(&part[1..]).map_err(|_| ())?;
-                root.push(u64::from_str_radix(as_str, 16).map_err(|_| ())?);
             } else {
-                queue_writeln!(
-                    output.clone(),
-                    "Error: Filenames unsupported in IPC namespace, Use /:1234/:cafe/ notation"
-                );
-                return Err(());
+                let as_str = core::str::from_utf8(part).map_err(|_| ())?;
+                root.push(u64::from_str_radix(as_str, 16).map_err(|_| ())?);
             }
         }
 
@@ -252,7 +246,7 @@ impl KShell {
             }
             queue_write!(self.output.clone(), "/");
             for dir in &self.cwd {
-                queue_write!(self.output.clone(), ":{:x}/", *dir);
+                queue_write!(self.output.clone(), "{:x}/", *dir);
             }
             if self.colors {
                 queue_write!(self.output.clone(), "\x1b[0m");
