@@ -91,6 +91,29 @@ pub fn init() {
             .await
             .unwrap();
 
+        fn print_unk(data: u8, state: &mut ConsoleState) {
+            let cursor = state.cursor;
+            fn to_hex_upper(data: u8) -> u8 {
+                if (data >> 4) > 9 {
+                    b'a' + (data >> 4) - 10
+                } else {
+                    b'0' + (data >> 4)
+                }
+            }
+            fn to_hex_lower(data: u8) -> u8 {
+                if (data & 0xf) > 9 {
+                    b'a' + (data & 0xf) - 10
+                } else {
+                    b'0' + (data & 0xf)
+                }
+            }
+            state.text_buf[(cursor) as usize] = b'<';
+            state.text_buf[(cursor + 1) as usize] = to_hex_upper(data);
+            state.text_buf[(cursor + 2) as usize] = to_hex_lower(data);
+            state.text_buf[(cursor + 3) as usize] = b'>';
+            state.cursor += 4;
+        }
+
         // Write to it forever
         let mut buf = [0u8; 1];
         loop {
@@ -100,7 +123,64 @@ pub fn init() {
                 match buf[0] {
                     // Newline
                     b'\n' => {
-                        state.cursor = (cursor / 80 * 80) + 80;
+                        if cursor as usize > (state.text_buf.len() - 80) {
+                            for line in 0..29 {
+                                let (top, bottom) = state.text_buf.split_at_mut((line + 1) * 80);
+                                (&mut top[line * 80..(line + 1) * 80])
+                                    .copy_from_slice(&bottom[0..80])
+                            }
+                            state.cursor = (state.text_buf.len() - 80) as u32;
+
+                            let last_line_end = state.text_buf.len();
+                            let last_line_start = last_line_end - 80;
+                            (&mut state.text_buf[last_line_start..last_line_end]).fill(b' ');
+                        } else {
+                            state.cursor = (cursor / 80 * 80) + 80;
+                        }
+                    }
+                    // Backspace
+                    0x7f | 0x08 => {
+                        state.cursor = (cursor / 80 * 80).max(cursor - 1);
+                    }
+                    // Bell (ignored)
+                    0x07 => {}
+                    // Control chars
+                    0x1b => {
+                        // print_unk(buf[0], &mut state);
+                        if let Some(1) = output_queue.queue_read(&mut buf).await {
+                            // print_unk(buf[0], &mut state);
+                            match buf[0] {
+                                b'[' => {
+                                    if let Some(1) = output_queue.queue_read(&mut buf).await {
+                                        // print_unk(buf[0], &mut state);
+                                        match buf[0] {
+                                            // Clear rest of line
+                                            b'K' => {
+                                                for clear_cursor in cursor..(cursor / 80 * 80) + 80
+                                                {
+                                                    state.text_buf[clear_cursor as usize] = b' ';
+                                                }
+                                            }
+                                            // Left
+                                            b'D' => {
+                                                state.cursor = (cursor / 80 * 80).max(cursor - 1);
+                                            }
+                                            // Right
+                                            b'C' => {
+                                                state.cursor =
+                                                    ((cursor / 80 * 80) + 80).min(cursor + 1);
+                                            }
+                                            _ => {
+                                                print_unk(buf[0], &mut state);
+                                            }
+                                        }
+                                    }
+                                }
+                                _ => {
+                                    print_unk(buf[0], &mut state);
+                                }
+                            }
+                        }
                     }
                     // Normal letters
                     b' '..=b'~' => {
@@ -109,25 +189,7 @@ pub fn init() {
                     }
                     // Unknown
                     _ => {
-                        fn to_hex_upper(data: u8) -> u8 {
-                            if (data >> 4) > 9 {
-                                b'a' + (data >> 4) - 9
-                            } else {
-                                b'0' + (data >> 4)
-                            }
-                        }
-                        fn to_hex_lower(data: u8) -> u8 {
-                            if (data & 0xf) > 9 {
-                                b'a' + (data & 0xf) - 9
-                            } else {
-                                b'0' + (data & 0xf)
-                            }
-                        }
-                        state.text_buf[(cursor) as usize] = b'<';
-                        state.text_buf[(cursor + 1) as usize] = to_hex_upper(buf[0]);
-                        state.text_buf[(cursor + 2) as usize] = to_hex_lower(buf[0]);
-                        state.text_buf[(cursor + 3) as usize] = b'>';
-                        state.cursor += 4;
+                        print_unk(buf[0], &mut state);
                     }
                 }
 

@@ -203,16 +203,17 @@ pub unsafe extern "C" fn kmain(dtb_addr: *const u8) {
             root
         }
 
-        let fb_shell_in = navigate(
-            root.clone(),
-            &[
-                ipc::well_known::ROOT_DEVICES,
-                ipc::well_known::DEVICES_RPI_FB_CON,
-                ipc::well_known::RPI_FB_CON0,
-                ipc::well_known::RPI_FB_CON_IN,
-            ],
-        )
-        .await;
+        // TODO: Non-functional until usb
+        // let fb_shell_in = navigate(
+        //     root.clone(),
+        //     &[
+        //         ipc::well_known::ROOT_DEVICES,
+        //         ipc::well_known::DEVICES_RPI_FB_CON,
+        //         ipc::well_known::RPI_FB_CON0,
+        //         ipc::well_known::RPI_FB_CON_IN,
+        //     ],
+        // )
+        // .await;
 
         let fb_shell_out = navigate(
             root.clone(),
@@ -247,8 +248,10 @@ pub unsafe extern "C" fn kmain(dtb_addr: *const u8) {
         )
         .await;
 
-        kshell::launch(fb_shell_in, fb_shell_out, false);
-        kshell::launch(uart_shell_in, uart_shell_out, true);
+        let (input1, input2) = ipc::spsc_mux::mux(uart_shell_in);
+
+        kshell::launch(input1, fb_shell_out, false);
+        kshell::launch(input2, uart_shell_out, true);
     });
 
     ktask::run();

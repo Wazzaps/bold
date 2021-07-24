@@ -32,8 +32,8 @@ macro_rules! print {
 /// Like the `println!` macro in the standard library, but prints to the UART.
 #[macro_export]
 macro_rules! println {
-    () => ($crate::print!("\r\n"));
-    ($($arg:tt)*) => ($crate::print!("{}\r\n", format_args!($($arg)*)));
+    () => ($crate::print!("\n"));
+    ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
 }
 
 /// Like the `write!` macro in the standard library, but prints to the queue.
@@ -46,7 +46,7 @@ macro_rules! queue_write {
 #[macro_export]
 macro_rules! queue_writeln {
     ($fmt: expr) => ($crate::queue_write!($fmt, "\r\n"));
-    ($fmt: expr, $($arg:tt)*) => ($crate::queue_write!($fmt, "{}\r\n", format_args!($($arg)*)));
+    ($fmt: expr, $($arg:tt)*) => ($crate::queue_write!($fmt, "{}\n", format_args!($($arg)*)));
 }
 
 struct FmtWriteAdapter<'a>(&'a (dyn fi::SyncWrite));

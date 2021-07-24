@@ -182,7 +182,7 @@ impl KShell {
                 }
                 // Newline
                 b'\r' | b'\n' => {
-                    queue_write!(self.output.clone(), "\r\n");
+                    queue_write!(self.output.clone(), "\n");
                     return buf;
                 }
                 // Unknown
