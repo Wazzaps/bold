@@ -3,9 +3,9 @@ use alloc::collections::VecDeque;
 use core::ptr::null;
 use core::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 use core::{future::Future, pin::Pin};
-use spin::Mutex;
+use spin::{Mutex, Once};
 
-pub(crate) static EXECUTOR: Mutex<Option<SimpleExecutor>> = Mutex::new(None);
+pub(crate) static EXECUTOR: Once<SimpleExecutor> = Once::new();
 
 pub struct Task {
     future: Pin<Box<(dyn Future<Output = ()> + Send)>>,
@@ -28,33 +28,40 @@ impl Task {
 }
 
 pub struct SimpleExecutor {
-    task_queue: VecDeque<Task>,
+    task_queue: Mutex<VecDeque<Task>>,
 }
 
 impl SimpleExecutor {
     pub fn new() -> SimpleExecutor {
         SimpleExecutor {
-            task_queue: VecDeque::new(),
+            task_queue: Mutex::new(VecDeque::new()),
         }
     }
 
-    pub fn spawn(&mut self, task: Task) {
-        self.task_queue.push_back(task)
+    pub fn spawn(&self, task: Task) {
+        self.task_queue.lock().push_back(task);
     }
 
-    pub fn run(&mut self) {
-        while let Some(mut task) = self.task_queue.pop_front() {
-            let waker = dummy_waker();
-            let mut context = Context::from_waker(&waker);
-            match task.poll(&mut context) {
-                Poll::Ready(()) => {} // task done
-                Poll::Pending => self.task_queue.push_back(task),
+    pub fn run(&self) {
+        loop {
+            let next_task = self.task_queue.lock().pop_front();
+            if let Some(mut task) = next_task {
+                let waker = dummy_waker();
+                let mut context = Context::from_waker(&waker);
+                match task.poll(&mut context) {
+                    Poll::Ready(()) => {} // task done
+                    Poll::Pending => {
+                        self.task_queue.lock().push_back(task);
+                    }
+                }
+            } else {
+                break;
             }
         }
     }
 
     pub fn run_blocking(task: Task) {
-        let mut executor = SimpleExecutor::new();
+        let executor = SimpleExecutor::new();
         executor.spawn(task);
         executor.run();
     }
@@ -99,18 +106,17 @@ impl Future for YieldNow {
 }
 
 pub fn init() {
-    EXECUTOR.lock().replace(SimpleExecutor::new());
+    EXECUTOR.call_once(SimpleExecutor::new);
 }
 
 pub fn run() {
-    EXECUTOR.lock().as_mut().unwrap().run();
+    EXECUTOR.wait().unwrap().run();
 }
 
 #[macro_export]
 macro_rules! spawn_task {
     ($b:block) => {{
-        let mut executor = crate::ktask::EXECUTOR.lock();
-        let executor = executor.as_mut().unwrap();
+        let executor = crate::ktask::EXECUTOR.wait().unwrap();
         let closure = async move || ($b);
         executor.spawn(crate::ktask::Task::new_raw(Box::pin(closure())));
     }};

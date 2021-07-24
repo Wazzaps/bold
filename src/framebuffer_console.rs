@@ -9,7 +9,6 @@ use crate::println;
 use crate::spawn_task;
 use crate::utils::ErrWarn;
 use alloc::boxed::Box;
-use alloc::sync::Arc;
 use core::sync::atomic::{AtomicBool, Ordering};
 use spin::Mutex;
 
@@ -51,7 +50,16 @@ pub fn init() {
         // Create the input queue
         let root = ipc::ROOT.read().as_ref().unwrap().clone();
         let _input_queue = root
-            .dir_link(0xcafe1, ipc::IpcSpscQueue::new())
+            .dir_get(ipc::well_known::ROOT_DEVICES)
+            .await
+            .unwrap()
+            .dir_get(ipc::well_known::DEVICES_RPI_FB_CON)
+            .await
+            .unwrap()
+            .dir_get(ipc::well_known::RPI_FB_CON0)
+            .await
+            .unwrap()
+            .dir_link(ipc::well_known::RPI_FB_CON_IN, ipc::IpcSpscQueue::new())
             .await
             .unwrap();
 
@@ -70,7 +78,16 @@ pub fn init() {
         // Create the output queue
         let root = ipc::ROOT.read().as_ref().unwrap().clone();
         let output_queue = root
-            .dir_link(0xbabe1, ipc::IpcSpscQueue::new())
+            .dir_get(ipc::well_known::ROOT_DEVICES)
+            .await
+            .unwrap()
+            .dir_get(ipc::well_known::DEVICES_RPI_FB_CON)
+            .await
+            .unwrap()
+            .dir_get(ipc::well_known::RPI_FB_CON0)
+            .await
+            .unwrap()
+            .dir_link(ipc::well_known::RPI_FB_CON_OUT, ipc::IpcSpscQueue::new())
             .await
             .unwrap();
 
@@ -144,9 +161,9 @@ pub fn init() {
                         for row in 0..30 {
                             framebuffer
                                 .call(framebuffer::FramebufferCM::DrawChar {
-                                    font: font,
+                                    font,
                                     char: buf[row * 80 + col],
-                                    row: row,
+                                    row,
                                     col,
                                 })
                                 .await

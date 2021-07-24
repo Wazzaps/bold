@@ -1,6 +1,5 @@
 #![allow(clippy::never_loop)]
 
-use crate::ipc::IpcNode;
 use crate::ktask;
 use crate::AsciiStr;
 use crate::{fonts, ipc};
@@ -8,6 +7,8 @@ use crate::{println, queue_write, queue_writeln, spawn_task};
 use alloc::boxed::Box;
 use alloc::vec;
 use alloc::vec::Vec;
+use futures::future::BoxFuture;
+use futures::stream;
 use futures::StreamExt;
 
 struct KShell {
@@ -265,12 +266,14 @@ impl KShell {
                         queue_writeln!(
                             self.output.clone(),
                             "help        : Print list of available commands\n\
-                             ls <PATH>   : List current directory\n\
+                             ls <PATH>   : List directory\n\
+                             tree <PATH> : List directory recursively\n\
                              cd <PATH>   : Change directory\n\
                              font <FONT> : Change framebuffer font"
                         );
                     }
                     b"ls" => self.handle_cmd_ls(&words).await,
+                    b"tree" => self.handle_cmd_tree(&words).await,
                     b"cd" => self.handle_cmd_cd(&words).await,
                     b"font" => self.handle_cmd_font(&words).await,
                     _ => {
@@ -285,44 +288,87 @@ impl KShell {
         }
     }
 
-    async fn handle_cmd_ls(&mut self, words: &Vec<&[u8]>) {
-        loop {
-            // Loops for a single iteration, just so we can break out
-
-            let path = match words.len() {
-                1 => self.cwd.clone(),
-                2 => match KShell::parse_path(&self.cwd, words[1]) {
-                    Ok(path) => path,
-                    Err(_) => {
-                        queue_writeln!(self.output.clone(), "Error: Invalid Path");
-                        break;
-                    }
-                },
-                _ => {
-                    queue_writeln!(self.output.clone(), "Error: Invalid Usage, see `help`");
-                    break;
+    async fn handle_cmd_ls(&mut self, words: &[&[u8]]) {
+        let path = match words.len() {
+            1 => self.cwd.clone(),
+            2 => match KShell::parse_path(&self.cwd, words[1]) {
+                Ok(path) => path,
+                Err(_) => {
+                    queue_writeln!(self.output.clone(), "Error: Invalid Path");
+                    return;
                 }
-            };
-            if let Some(cwd) = self.navigate_to_path(&path).await {
-                if cwd.describe() == *b"DIR " {
-                    if let Some(mut stream) = cwd.dir_list() {
-                        while let Some(item) = stream.next().await {
-                            queue_writeln!(self.output.clone(), "{:?}", item);
-                        }
-                    } else {
-                        queue_writeln!(self.output.clone(), "Error: Failed to list given path");
+            },
+            _ => {
+                queue_writeln!(self.output.clone(), "Error: Invalid Usage, see `help`");
+                return;
+            }
+        };
+
+        if let Some(cwd) = self.navigate_to_path(&path).await {
+            if cwd.describe() == *b"DIR " {
+                if let Some(mut stream) = cwd.dir_list() {
+                    while let Some(item) = stream.next().await {
+                        queue_writeln!(self.output.clone(), "{:?}", item);
                     }
                 } else {
-                    queue_writeln!(self.output.clone(), "Error: Not a directory");
+                    queue_writeln!(self.output.clone(), "Error: Failed to list given path");
                 }
             } else {
-                queue_writeln!(self.output.clone(), "Error: Directory doesn't exist");
+                queue_writeln!(self.output.clone(), "Error: Not a directory");
             }
-            break;
+        } else {
+            queue_writeln!(self.output.clone(), "Error: Directory doesn't exist");
         }
     }
 
-    async fn handle_cmd_font(&mut self, words: &Vec<&[u8]>) {
+    async fn handle_cmd_tree(&mut self, words: &[&[u8]]) {
+        let path = match words.len() {
+            1 => self.cwd.clone(),
+            2 => match KShell::parse_path(&self.cwd, words[1]) {
+                Ok(path) => path,
+                Err(_) => {
+                    queue_writeln!(self.output.clone(), "Error: Invalid Path");
+                    return;
+                }
+            },
+            _ => {
+                queue_writeln!(self.output.clone(), "Error: Invalid Usage, see `help`");
+                return;
+            }
+        };
+
+        if let Some(cwd) = self.navigate_to_path(&path).await {
+            if cwd.describe() == *b"DIR " {
+                if let Some(stream) = cwd.dir_list() {
+                    fn rec_print(
+                        output: ipc::IpcRef,
+                        mut stream: stream::BoxStream<ipc::IpcRef>,
+                        depth: usize,
+                    ) -> BoxFuture<()> {
+                        Box::pin(async move {
+                            while let Some(item) = stream.next().await {
+                                queue_write!(output.clone(), "{}", "| ".repeat(depth));
+                                queue_writeln!(output.clone(), "{:?}", item);
+                                if let Some(stream) = item.dir_list() {
+                                    rec_print(output.clone(), stream, depth + 1).await;
+                                }
+                            }
+                        })
+                    }
+
+                    rec_print(self.output.clone(), stream, 0).await;
+                } else {
+                    queue_writeln!(self.output.clone(), "Error: Failed to list given path");
+                }
+            } else {
+                queue_writeln!(self.output.clone(), "Error: Not a directory");
+            }
+        } else {
+            queue_writeln!(self.output.clone(), "Error: Directory doesn't exist");
+        }
+    }
+
+    async fn handle_cmd_font(&mut self, words: &[&[u8]]) {
         if words.len() != 2 {
             queue_writeln!(
                 self.output.clone(),
@@ -346,7 +392,7 @@ impl KShell {
         crate::framebuffer_console::set_font(font);
     }
 
-    async fn handle_cmd_cd(&mut self, words: &Vec<&[u8]>) {
+    async fn handle_cmd_cd(&mut self, words: &[&[u8]]) {
         let path = match words.len() {
             1 => vec![],
             2 => match KShell::parse_path(&self.cwd, words[1]) {
@@ -374,13 +420,10 @@ impl KShell {
     }
 }
 
-pub fn launch(in_id: u64, out_id: u64, colors: bool) {
-    println!("[INFO] Starting kshell for {:x}:{:x}", in_id, out_id);
+pub fn launch(input_queue: ipc::IpcRef, output_queue: ipc::IpcRef, colors: bool) {
+    println!("[INFO] Starting kshell");
     spawn_task!({
-        // Open the input queue
         let root = ipc::ROOT.read().as_ref().unwrap().clone();
-        let input_queue = root.dir_get(in_id).await.unwrap();
-        let output_queue = root.dir_get(out_id).await.unwrap();
 
         // Create shell
         KShell {

@@ -9,7 +9,6 @@ use crate::ipc;
 use crate::{driver_manager, fi, ktask};
 use crate::{spawn_task, ErrWarn};
 use alloc::prelude::v1::Box;
-use alloc::sync::Arc;
 use async_trait::async_trait;
 use core::cell::UnsafeCell;
 use spin::RwLock;
@@ -56,7 +55,16 @@ impl driver_manager::Driver for Driver {
             // Create the input queue
             let root = ipc::ROOT.read().as_ref().unwrap().clone();
             let input_queue = root
-                .dir_link(0xcafe0, ipc::IpcSpscQueue::new())
+                .dir_get(ipc::well_known::ROOT_DEVICES)
+                .await
+                .unwrap()
+                .dir_get(ipc::well_known::DEVICES_RPI_UART)
+                .await
+                .unwrap()
+                .dir_get(ipc::well_known::RPI_UART1)
+                .await
+                .unwrap()
+                .dir_link(ipc::well_known::RPI_UART_IN, ipc::IpcSpscQueue::new())
                 .await
                 .unwrap();
 
@@ -74,7 +82,16 @@ impl driver_manager::Driver for Driver {
             // Create the output queue
             let root = ipc::ROOT.read().as_ref().unwrap().clone();
             let output_queue = root
-                .dir_link(0xbabe0, ipc::IpcSpscQueue::new())
+                .dir_get(ipc::well_known::ROOT_DEVICES)
+                .await
+                .unwrap()
+                .dir_get(ipc::well_known::DEVICES_RPI_UART)
+                .await
+                .unwrap()
+                .dir_get(ipc::well_known::RPI_UART1)
+                .await
+                .unwrap()
+                .dir_link(ipc::well_known::RPI_UART_OUT, ipc::IpcSpscQueue::new())
                 .await
                 .unwrap();
 

@@ -11,9 +11,8 @@
 
 extern crate alloc;
 
-use crate::arch::aarch64::mmio::{delay_us, get_uptime_us};
+use crate::arch::aarch64::mmio::delay_us;
 use crate::arch::aarch64::{mailbox_methods, mmu, phymem, virtmem};
-use crate::driver_manager::DeviceType;
 use alloc::boxed::Box;
 
 pub(crate) mod arch;
@@ -31,7 +30,6 @@ pub(crate) mod utils;
 
 use crate::arch::aarch64::phymem::PhyAddr;
 use crate::console::{dump_hex, dump_hex_slice};
-use crate::ktask::yield_now;
 use crate::ErrWarn;
 use core::ops::Deref;
 use core::ptr::slice_from_raw_parts;
@@ -97,13 +95,6 @@ pub unsafe extern "C" fn kmain(dtb_addr: *const u8) {
     ] {
         println!("V2P(0x{:x}) -> {:?}", addr, mmu::virt2phy(addr));
     }
-
-    // Try input
-    // let con = driver_manager::device_by_type(DeviceType::Console).unwrap();
-    // let mut buf = [0; 4];
-    // con.read.unwrap()
-    //     .read_exact(&mut buf).unwrap();
-    // println!("{:?}", buf);
 
     // Map some page
     const PAGE_FLAGS: u64 = mmu::PT_USER | // non-privileged
@@ -202,8 +193,63 @@ pub unsafe extern "C" fn kmain(dtb_addr: *const u8) {
     // sdhc.read_block(0, &mut buf).unwrap();
     // assert_eq!(buf[0], 0xdeadbeef);
 
-    kshell::launch(0xcafe0, 0xbabe0, true);
-    kshell::launch(0xcafe1, 0xbabe1, false);
+    spawn_task!({
+        let root = ipc::ROOT.read().as_ref().unwrap().clone();
+
+        async fn navigate(mut root: ipc::IpcRef, path: &[u64]) -> ipc::IpcRef {
+            for p in path {
+                root = root.dir_get(*p).await.unwrap();
+            }
+            root
+        }
+
+        let fb_shell_in = navigate(
+            root.clone(),
+            &[
+                ipc::well_known::ROOT_DEVICES,
+                ipc::well_known::DEVICES_RPI_FB_CON,
+                ipc::well_known::RPI_FB_CON0,
+                ipc::well_known::RPI_FB_CON_IN,
+            ],
+        )
+        .await;
+
+        let fb_shell_out = navigate(
+            root.clone(),
+            &[
+                ipc::well_known::ROOT_DEVICES,
+                ipc::well_known::DEVICES_RPI_FB_CON,
+                ipc::well_known::RPI_FB_CON0,
+                ipc::well_known::RPI_FB_CON_OUT,
+            ],
+        )
+        .await;
+
+        let uart_shell_in = navigate(
+            root.clone(),
+            &[
+                ipc::well_known::ROOT_DEVICES,
+                ipc::well_known::DEVICES_RPI_UART,
+                ipc::well_known::RPI_UART1,
+                ipc::well_known::RPI_UART_IN,
+            ],
+        )
+        .await;
+
+        let uart_shell_out = navigate(
+            root.clone(),
+            &[
+                ipc::well_known::ROOT_DEVICES,
+                ipc::well_known::DEVICES_RPI_UART,
+                ipc::well_known::RPI_UART1,
+                ipc::well_known::RPI_UART_OUT,
+            ],
+        )
+        .await;
+
+        kshell::launch(fb_shell_in, fb_shell_out, false);
+        kshell::launch(uart_shell_in, uart_shell_out, true);
+    });
 
     ktask::run();
 

@@ -1,20 +1,18 @@
 pub(crate) mod dir;
 pub(crate) mod spsc_queue;
+pub(crate) mod well_known;
 
-use crate::unwrap_variant;
 use crate::{println, utils};
 use alloc::boxed::Box;
 use alloc::sync::Arc;
 use alloc::vec;
-use alloc::vec::Vec;
 use async_trait::async_trait;
 use core::fmt::{Debug, Formatter};
 pub use dir::IpcDir;
 use futures::stream::BoxStream;
-use futures::{stream, StreamExt};
-use spin::{Mutex, RwLock};
+use futures::StreamExt;
+use spin::RwLock;
 pub use spsc_queue::IpcSpscQueue;
-use spsc_queue::SpscQueue;
 
 #[derive(Clone)]
 pub struct IpcRef {
@@ -90,36 +88,43 @@ impl IpcRef {
 
 pub fn init() {
     ROOT.write().replace(IpcRef {
-        id: 0,
+        id: well_known::ROOT,
         inner: IpcDir::new_filled(vec![
             IpcRef {
-                id: 1,
+                id: well_known::ROOT_EXAMPLE,
                 inner: IpcDir::new_filled(vec![
                     IpcRef {
-                        id: 1,
+                        id: well_known::EXAMPLE_1,
                         inner: IpcDir::new_empty(),
                     },
                     IpcRef {
-                        id: 2,
+                        id: well_known::EXAMPLE_2,
                         inner: IpcDir::new_empty(),
                     },
                     IpcRef {
-                        id: 3,
+                        id: well_known::EXAMPLE_3,
                         inner: IpcSpscQueue::new(),
                     },
                 ]),
             },
             IpcRef {
-                id: 2,
-                inner: IpcDir::new_empty(),
-            },
-            IpcRef {
-                id: 3,
-                inner: IpcDir::new_empty(),
-            },
-            IpcRef {
-                id: 4,
-                inner: IpcDir::new_empty(),
+                id: well_known::ROOT_DEVICES,
+                inner: IpcDir::new_filled(vec![
+                    IpcRef {
+                        id: well_known::DEVICES_RPI_UART,
+                        inner: IpcDir::new_filled(vec![IpcRef {
+                            id: well_known::RPI_UART1,
+                            inner: IpcDir::new_empty(),
+                        }]),
+                    },
+                    IpcRef {
+                        id: well_known::DEVICES_RPI_FB_CON,
+                        inner: IpcDir::new_filled(vec![IpcRef {
+                            id: well_known::RPI_FB_CON0,
+                            inner: IpcDir::new_empty(),
+                        }]),
+                    },
+                ]),
             },
         ]),
     });
