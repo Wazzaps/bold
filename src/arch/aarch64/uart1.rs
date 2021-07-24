@@ -5,6 +5,7 @@ use crate::arch::aarch64::mmio::{
 };
 use crate::driver_manager::{DeviceType, DriverInfo};
 use crate::file_interface::IoResult;
+use crate::ipc;
 use crate::{driver_manager, fi, ktask};
 use crate::{spawn_task, ErrWarn};
 use alloc::prelude::v1::Box;
@@ -53,14 +54,9 @@ impl driver_manager::Driver for Driver {
 
         spawn_task!({
             // Create the input queue
-            let root = crate::ipc::ROOT.read().as_ref().unwrap().clone();
+            let root = ipc::ROOT.read().as_ref().unwrap().clone();
             let input_queue = root
-                .dir_link(
-                    0xcafe0,
-                    Arc::new(crate::ipc::IpcNode::SpscQueue(
-                        crate::ipc::IpcSpscQueue::new(),
-                    )),
-                )
+                .dir_link(0xcafe0, ipc::IpcSpscQueue::new())
                 .await
                 .unwrap();
 
@@ -76,14 +72,9 @@ impl driver_manager::Driver for Driver {
 
         spawn_task!({
             // Create the output queue
-            let root = crate::ipc::ROOT.read().as_ref().unwrap().clone();
+            let root = ipc::ROOT.read().as_ref().unwrap().clone();
             let output_queue = root
-                .dir_link(
-                    0xbabe0,
-                    Arc::new(crate::ipc::IpcNode::SpscQueue(
-                        crate::ipc::IpcSpscQueue::new(),
-                    )),
-                )
+                .dir_link(0xbabe0, ipc::IpcSpscQueue::new())
                 .await
                 .unwrap();
 

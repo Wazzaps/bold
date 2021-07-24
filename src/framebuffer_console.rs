@@ -3,6 +3,7 @@ use crate::driver_manager;
 use crate::driver_manager::DeviceType;
 use crate::fonts;
 use crate::framebuffer;
+use crate::ipc;
 use crate::ktask::yield_now;
 use crate::println;
 use crate::spawn_task;
@@ -48,14 +49,9 @@ pub fn set_font(font: &'static [u8]) {
 pub fn init() {
     spawn_task!({
         // Create the input queue
-        let root = crate::ipc::ROOT.read().as_ref().unwrap().clone();
+        let root = ipc::ROOT.read().as_ref().unwrap().clone();
         let _input_queue = root
-            .dir_link(
-                0xcafe1,
-                Arc::new(crate::ipc::IpcNode::SpscQueue(
-                    crate::ipc::IpcSpscQueue::new(),
-                )),
-            )
+            .dir_link(0xcafe1, ipc::IpcSpscQueue::new())
             .await
             .unwrap();
 
@@ -72,14 +68,9 @@ pub fn init() {
 
     spawn_task!({
         // Create the output queue
-        let root = crate::ipc::ROOT.read().as_ref().unwrap().clone();
+        let root = ipc::ROOT.read().as_ref().unwrap().clone();
         let output_queue = root
-            .dir_link(
-                0xbabe1,
-                Arc::new(crate::ipc::IpcNode::SpscQueue(
-                    crate::ipc::IpcSpscQueue::new(),
-                )),
-            )
+            .dir_link(0xbabe1, ipc::IpcSpscQueue::new())
             .await
             .unwrap();
 

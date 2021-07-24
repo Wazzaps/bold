@@ -204,7 +204,7 @@ impl KShell {
         Some(root)
     }
 
-    fn parse_path(output: &ipc::IpcRef, cwd: &[u64], path: &[u8]) -> Result<Vec<u64>, ()> {
+    fn parse_path(cwd: &[u64], path: &[u8]) -> Result<Vec<u64>, ()> {
         let mut root = if path.starts_with(b"/") {
             vec![]
         } else {
@@ -291,7 +291,7 @@ impl KShell {
 
             let path = match words.len() {
                 1 => self.cwd.clone(),
-                2 => match KShell::parse_path(&self.output, &self.cwd, words[1]) {
+                2 => match KShell::parse_path(&self.cwd, words[1]) {
                     Ok(path) => path,
                     Err(_) => {
                         queue_writeln!(self.output.clone(), "Error: Invalid Path");
@@ -304,7 +304,7 @@ impl KShell {
                 }
             };
             if let Some(cwd) = self.navigate_to_path(&path).await {
-                if let IpcNode::Dir(_) = *cwd.inner {
+                if cwd.describe() == *b"DIR " {
                     if let Some(mut stream) = cwd.dir_list() {
                         while let Some(item) = stream.next().await {
                             queue_writeln!(self.output.clone(), "{:?}", item);
@@ -349,7 +349,7 @@ impl KShell {
     async fn handle_cmd_cd(&mut self, words: &Vec<&[u8]>) {
         let path = match words.len() {
             1 => vec![],
-            2 => match KShell::parse_path(&self.output, &self.cwd, words[1]) {
+            2 => match KShell::parse_path(&self.cwd, words[1]) {
                 Ok(path) => path,
                 Err(_) => {
                     queue_writeln!(self.output.clone(), "Error: Invalid Path");
@@ -363,7 +363,7 @@ impl KShell {
         };
 
         if let Some(given_dir) = self.navigate_to_path(&path).await {
-            if let IpcNode::Dir(_) = *given_dir.inner {
+            if given_dir.describe() == *b"DIR " {
                 self.cwd = path;
             } else {
                 queue_writeln!(self.output.clone(), "Error: Not a directory");
