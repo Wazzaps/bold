@@ -1,3 +1,4 @@
+use crate::arch::aarch64::uart1::write_uart1;
 use crate::driver_manager::{drivers, DeviceType};
 use crate::println;
 use crate::{fi, ktask};
@@ -50,10 +51,19 @@ macro_rules! queue_writeln {
 }
 
 struct FmtWriteAdapter<'a>(&'a (dyn fi::SyncWrite));
+struct FmtWriteAdapter2;
 
 impl fmt::Write for FmtWriteAdapter<'_> {
     fn write_str(&mut self, s: &str) -> fmt::Result {
         self.0.write_all(s.as_bytes()).map_err(|_| fmt::Error)
+    }
+}
+
+impl fmt::Write for FmtWriteAdapter2 {
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        write_uart1(s.as_bytes())
+            .map(|_| ())
+            .map_err(|_| fmt::Error)
     }
 }
 
@@ -62,10 +72,11 @@ impl fmt::Write for FmtWriteAdapter<'_> {
 pub fn _print(args: fmt::Arguments) {
     use core::fmt::Write;
 
-    if let Some(console) = MAIN_CONSOLE.read().as_deref() {
-        // Ignore return code
-        let _ = FmtWriteAdapter(console.sync_write.unwrap()).write_fmt(args);
-    }
+    let _ = FmtWriteAdapter2.write_fmt(args);
+    // if let Some(console) = MAIN_CONSOLE.read().as_deref() {
+    //     // Ignore return code
+    //     let _ = FmtWriteAdapter(console.sync_write.unwrap()).write_fmt(args);
+    // }
 }
 
 struct FmtQueueWriteAdapter(ipc::IpcRef);

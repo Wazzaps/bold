@@ -4,11 +4,11 @@ use crate::{get_msr, println, set_msr};
 use alloc::boxed::Box;
 use core::mem::size_of;
 
-const PAGE_SIZE: u64 = 4096;
+pub const PAGE_SIZE: u64 = 4096;
 
 // Granularity
-const PT_PAGE: u64 = 0b11;
-const PT_BLOCK: u64 = 0b01;
+pub const PT_PAGE: u64 = 0b11;
+pub const PT_BLOCK: u64 = 0b01;
 
 // Accessibility
 pub const PT_KERNEL: u64 = 0 << 6;
@@ -147,25 +147,6 @@ pub unsafe fn init() -> Result<(), ()> {
                 }
         };
     }
-    println!("Defining 0x{:x} as DMA memory [fb]", 0x1f4 << 21);
-    PAGING.user_l2.0[500] = {
-        (0x1f4u64 << 21) as u64 | // Physical address
-            PT_BLOCK |    // map 2M block
-            PT_AF |       // accessed flag
-            PT_NX |       // no execute
-            PT_USER |     // non-privileged
-            PT_OSH | PT_DEV
-    };
-    // println!("->{:x}", PAGING.user_l2_high[500]);
-    println!("Defining 0x{:x} as DMA memory [fb]", 0x1f5 << 21);
-    PAGING.user_l2.0[501] = {
-        (0x1f5u64 << 21) as u64 | // Physical address
-            PT_BLOCK |    // map 2M block
-            PT_AF |       // accessed flag
-            PT_NX |       // no execute
-            PT_USER |     // non-privileged
-            PT_OSH | PT_DEV
-    };
 
     // User L3 table
     for (i, tbl) in PAGING.user_l3.0.iter_mut().enumerate() {
@@ -176,7 +157,7 @@ pub unsafe fn init() -> Result<(), ()> {
                 PT_USER |     // non-privileged
                 if i >= dma_start && i < dma_end {
                     println!("Defining 0x{:x} as DMA memory", i as u64 * PAGE_SIZE);
-                    PT_OSH | PT_DEV | PT_RW | PT_NX
+                    PT_OSH | PT_NC | PT_RW | PT_NX
                 } else if i < 0x80 || i >= data_cutoff {
                     PT_MEM | PT_ISH | PT_RW | PT_NX
                 } else {

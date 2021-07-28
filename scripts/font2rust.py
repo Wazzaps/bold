@@ -18,7 +18,7 @@ if __name__ == '__main__':
             for y in range(16):
                 for x in range(8):
                     data += list(pixels[col*9 + x, row*17 + y])
-                    # data.append(0)  # Alpha
+                    data.append(0)  # Alpha
 
     open(f'src/fonts/{font_name}.binfont', 'wb').write(bytearray(data))
 

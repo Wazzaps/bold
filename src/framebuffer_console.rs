@@ -12,14 +12,64 @@ use alloc::boxed::Box;
 use core::sync::atomic::{AtomicBool, Ordering};
 use spin::Mutex;
 
+pub struct PerfInfo {
+    sample_us_sum: u64,
+    sample_count: u64,
+    last_sample_us: u64,
+}
+
+#[derive(Debug)]
+pub struct PerfReport {
+    sample_avg_us: u64,
+    avg_fps: u64,
+    last_sample_us: u64,
+}
+
+impl PerfInfo {
+    const fn new() -> Self {
+        Self {
+            sample_us_sum: 0,
+            sample_count: 0,
+            last_sample_us: 0,
+        }
+    }
+
+    fn update(&mut self, time_us: u64) {
+        self.last_sample_us = time_us;
+        self.sample_us_sum += time_us;
+        self.sample_count += 1;
+    }
+
+    fn report(&self) -> PerfReport {
+        let sample_avg_us = self
+            .sample_us_sum
+            .checked_div(self.sample_count)
+            .unwrap_or(0);
+        PerfReport {
+            sample_avg_us,
+            avg_fps: 1000000u64.checked_div(sample_avg_us).unwrap_or(0),
+            last_sample_us: self.last_sample_us,
+        }
+    }
+}
+
+static PERF_INFO: Mutex<PerfInfo> = Mutex::new(PerfInfo::new());
+
+pub fn perf_report() -> PerfReport {
+    PERF_INFO.lock().report()
+}
+
 async fn vsync<F, Fut>(mut f: F)
 where
     F: FnMut() -> Fut,
-    Fut: core::future::Future<Output = ()>,
+    Fut: core::future::Future<Output = bool>,
 {
     let start = get_uptime_us();
-    (f)().await;
+    let did_render = (f)().await;
     let end = get_uptime_us();
+    if did_render {
+        PERF_INFO.lock().update(end - start);
+    }
     if end < start + 16666 {
         delay_us(16666 - (end - start)).await;
     } else {
@@ -29,12 +79,14 @@ where
 
 struct ConsoleState {
     pub text_buf: [u8; 80 * 30],
+    pub last_text_buf: [u8; 80 * 30],
     pub cursor: u32,
     pub font: &'static [u8],
 }
 
 static STATE: Mutex<ConsoleState> = Mutex::new(ConsoleState {
     text_buf: [b' '; 80 * 30],
+    last_text_buf: [b' '; 80 * 30],
     cursor: 0,
     font: fonts::TERMINUS,
 });
@@ -214,25 +266,35 @@ pub fn init() {
             .unwrap();
         loop {
             vsync(async || {
-                if IS_CHANGED.swap(false, Ordering::SeqCst) {
-                    let state = STATE.lock();
-                    let buf = state.text_buf;
-                    let font = state.font;
-
+                let did_change = IS_CHANGED.swap(false, Ordering::SeqCst);
+                if did_change {
                     for col in 0..80 {
                         for row in 0..30 {
-                            framebuffer
-                                .call(framebuffer::FramebufferCM::DrawChar {
-                                    font,
-                                    char: buf[row * 80 + col],
-                                    row,
-                                    col,
-                                })
-                                .await
-                                .warn();
+                            {
+                                let mut state = STATE.lock();
+                                let font = state.font;
+
+                                if state.text_buf[row * 80 + col]
+                                    != state.last_text_buf[row * 80 + col]
+                                {
+                                    framebuffer
+                                        .call(framebuffer::FramebufferCM::DrawChar {
+                                            font,
+                                            char: state.text_buf[row * 80 + col],
+                                            row,
+                                            col,
+                                        })
+                                        .await
+                                        .warn();
+                                    state.last_text_buf[row * 80 + col] =
+                                        state.text_buf[row * 80 + col];
+                                }
+                            }
+                            yield_now().await;
                         }
                     }
                 }
+                did_change
             })
             .await;
         }

@@ -6,6 +6,7 @@ use crate::arch::aarch64::mmio::{
 use crate::driver_manager::{DeviceType, DriverInfo};
 use crate::file_interface::IoResult;
 use crate::ipc;
+use crate::println;
 use crate::{driver_manager, fi, ktask};
 use crate::{spawn_task, ErrWarn};
 use alloc::prelude::v1::Box;
@@ -20,32 +21,46 @@ struct Driver {
     info: UnsafeCell<DriverInfo>,
 }
 
+pub fn init_uart1() {
+    unsafe {
+        // Initialize UART
+        mmio_write(UART1_ENABLE, mmio_read(UART1_ENABLE) | 1);
+        mmio_write(UART1_MU_CNTL, 0);
+        mmio_write(UART1_MU_LCR, 3); // 8 bits
+        mmio_write(UART1_MU_MCR, 0);
+        mmio_write(UART1_MU_IER, 0);
+        mmio_write(UART1_MU_IIR, 0xc6); // disable interrupts
+        mmio_write(UART1_MU_BAUD, 270); // 115200 baud
+
+        // Map UART1 to GPIO pins
+        mmio_write(GPFSEL1, {
+            let mut new_val = mmio_read(GPFSEL1);
+            new_val &= !((7 << 12) | (7 << 15)); // gpio14, gpio15
+            new_val |= (2 << 12) | (2 << 15); // alt5
+            new_val
+        });
+        mmio_write(GPPUD, 0); // enable pins 14 and 15
+        delay(1500);
+        mmio_write(GPPUDCLK0, (1 << 14) | (1 << 15));
+        delay(1500);
+        mmio_write(GPPUDCLK0, 0); // flush GPIO setup
+        mmio_write(UART1_MU_CNTL, 3); // enable Tx, Rx
+    }
+}
+
+pub fn write_uart1(buf: &[u8]) -> IoResult<usize> {
+    for c in buf {
+        unsafe {
+            // Wait for UART to become ready to transmit.
+            while mmio_read(UART1_MU_LSR) & 0x20 == 0 {}
+            mmio_write(UART1_MU_IO, *c as u32);
+        }
+    }
+    Ok(buf.len())
+}
+
 impl driver_manager::Driver for Driver {
     fn init(&self) -> Result<(), ()> {
-        unsafe {
-            // Initialize UART
-            mmio_write(UART1_ENABLE, mmio_read(UART1_ENABLE) | 1);
-            mmio_write(UART1_MU_CNTL, 0);
-            mmio_write(UART1_MU_LCR, 3); // 8 bits
-            mmio_write(UART1_MU_MCR, 0);
-            mmio_write(UART1_MU_IER, 0);
-            mmio_write(UART1_MU_IIR, 0xc6); // disable interrupts
-            mmio_write(UART1_MU_BAUD, 270); // 115200 baud
-
-            // Map UART1 to GPIO pins
-            mmio_write(GPFSEL1, {
-                let mut new_val = mmio_read(GPFSEL1);
-                new_val &= !((7 << 12) | (7 << 15)); // gpio14, gpio15
-                new_val |= (2 << 12) | (2 << 15); // alt5
-                new_val
-            });
-            mmio_write(GPPUD, 0); // enable pins 14 and 15
-            delay(1500);
-            mmio_write(GPPUDCLK0, (1 << 14) | (1 << 15));
-            delay(1500);
-            mmio_write(GPPUDCLK0, 0); // flush GPIO setup
-            mmio_write(UART1_MU_CNTL, 3); // enable Tx, Rx
-        }
         // FIXME: Vulnerability
         unsafe {
             (*self.info.get()).initialized = true;
@@ -96,10 +111,13 @@ impl driver_manager::Driver for Driver {
                 .unwrap();
 
             // Write to it forever
-            let mut buf = [0u8; 1];
+            let mut buf = [0u8; 512];
             loop {
-                if let Some(1) = output_queue.queue_read(&mut buf).await {
-                    fi::Write::write_all(&DEVICE, &buf).await.unwrap()
+                if let Some(count) = output_queue.queue_read(&mut buf).await {
+                    if count != 0 {
+                        // fi::SyncWrite::write_all(&DEVICE, &buf).await.unwrap();
+                        fi::SyncWrite::write_all(&DEVICE, &buf[0..count]).unwrap();
+                    }
                 }
                 ktask::yield_now().await;
             }

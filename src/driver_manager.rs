@@ -10,6 +10,10 @@ extern "C" {
 }
 
 pub trait Driver {
+    fn early_init(&self) -> Result<(), ()> {
+        Ok(())
+    }
+
     fn init(&self) -> Result<(), ()> {
         Ok(())
     }
@@ -88,6 +92,12 @@ pub unsafe fn drivers_mut() -> &'static mut [&'static mut dyn Driver] {
     &mut *slice_from_raw_parts_mut(start, end.offset_from(start) as usize)
 }
 
+fn early_init_driver(driver: &'static dyn Driver) -> Result<(), ()> {
+    println!("[INFO] Early-Initializing driver \"{:?}\"", driver);
+
+    driver.early_init()
+}
+
 fn init_driver(driver: &'static dyn Driver) -> Result<(), ()> {
     println!("[INFO] Initializing driver \"{:?}\"", driver);
 
@@ -102,6 +112,14 @@ pub fn init_driver_by_name(name: &[u8]) -> Result<(), ()> {
         }
     }
     Err(())
+}
+
+pub unsafe fn early_init_all_drivers() {
+    for driver in drivers_mut() {
+        if early_init_driver(*driver).is_err() {
+            println!("[EROR] Failed to initialize driver: \"{:?}\"", driver);
+        }
+    }
 }
 
 pub fn init_all_drivers() {

@@ -1,12 +1,17 @@
-use crate::arch::aarch64::mailbox;
+use crate::arch::aarch64::mailbox::_send_fb_property_tags;
+use crate::arch::aarch64::mmio::delay;
+use crate::arch::aarch64::mmu::PAGE_SIZE;
+use crate::arch::aarch64::phymem::{PhyAddr, PhySlice};
+use crate::arch::aarch64::{mailbox, mmu};
+use crate::arch::aarch64::{mailbox_methods, phymem};
 use crate::driver_manager::{DeviceType, DriverInfo};
 use crate::file_interface::IoResult;
 use crate::framebuffer::FramebufferCM;
-use crate::{driver_manager, fi, println};
+use crate::{driver_manager, fi, print, println, ErrWarn};
 use alloc::prelude::v1::Box;
 use async_trait::async_trait;
 use core::cell::UnsafeCell;
-use spin::RwLock;
+use spin::{Mutex, RwLock};
 
 // const FB_WIDTH: u32 = 1280;
 // const FB_HEIGHT: u32 = 720;
@@ -14,48 +19,83 @@ use spin::RwLock;
 const FB_WIDTH: u32 = 640;
 const FB_HEIGHT: u32 = 480;
 
-#[derive(Debug)]
-#[repr(align(16), C)]
-struct FramebufferInfo {
-    width: u32,
-    height: u32,
-    virt_width: u32,
-    virt_height: u32,
-    pitch: u32,
-    depth: u32,
-    x_offset: u32,
-    y_offset: u32,
-    pointer: u32,
-    size: u32,
-}
+const FB_PIXEL_ORDER_RGB: u32 = 1;
+const FB_PIXEL_ORDER_BGR: u32 = 0;
 
-#[link_section = ".dma"]
-#[used]
-static mut FB_INFO: FramebufferInfo = FramebufferInfo {
-    width: FB_WIDTH,
-    height: FB_HEIGHT,
-    virt_width: FB_WIDTH,
-    virt_height: FB_HEIGHT,
-    pitch: 0,
-    depth: 24,
-    x_offset: 0,
-    y_offset: 0,
-    pointer: 0,
-    size: 0,
-};
+#[derive(Debug)]
+pub(crate) struct FramebufferInfo {
+    pub width: u32,
+    pub height: u32,
+    pub virt_width: u32,
+    pub virt_height: u32,
+    pub pitch: u32,
+    pub depth: u32,
+    pub x_offset: u32,
+    pub y_offset: u32,
+    pub pointer: u32,
+    pub size: u32,
+}
 
 // ----- Driver -----
 
 #[derive(Debug)]
 struct Driver {
     info: UnsafeCell<DriverInfo>,
+    pub fb_info: Mutex<FramebufferInfo>,
 }
 
 impl driver_manager::Driver for Driver {
-    fn init(&self) -> Result<(), ()> {
+    fn early_init(&self) -> Result<(), ()> {
         unsafe {
-            mailbox::write_raw(((&mut FB_INFO as *mut FramebufferInfo as usize as u32) & !0xF) | 1);
-            println!("{:?}", FB_INFO);
+            println!("Getting framebuffer");
+            // let current_size = mailbox_methods::get_framebuffer_phy_size()?;
+            // println!("{:?}", current_size);
+            // assert_eq!(
+            //     mailbox_methods::set_framebuffer_phy_size(FB_WIDTH, FB_HEIGHT)?,
+            //     (FB_WIDTH, FB_HEIGHT)
+            // );
+            // assert_eq!(
+            //     mailbox_methods::set_framebuffer_virt_size(FB_WIDTH, FB_HEIGHT)?,
+            //     (FB_WIDTH, FB_HEIGHT)
+            // );
+            // assert_eq!(mailbox_methods::set_framebuffer_virt_offset(0, 0)?, (0, 0));
+            // assert_eq!(mailbox_methods::set_framebuffer_depth(32)?, 32);
+            // // assert_eq!(
+            // //     mailbox_methods::set_framebuffer_pixel_order(FB_PIXEL_ORDER_BGR)?,
+            // //     FB_PIXEL_ORDER_BGR
+            // // );
+            //
+            // let slice = mailbox_methods::alloc_framebuffer(4096)?;
+            // assert_ne!(slice.base.0, 0);
+            // assert_ne!(slice.len, 0);
+            // let pitch = mailbox_methods::get_framebuffer_pitch()?;
+            let fb_info = _send_fb_property_tags()?;
+            println!("{:?}", fb_info);
+            let slice = PhySlice {
+                base: PhyAddr(fb_info.pointer as usize),
+                len: fb_info.size as usize,
+            };
+
+            *self.fb_info.lock() = fb_info;
+
+            let pointer = slice.base.0;
+            let page_count = ((slice.len as u64 + PAGE_SIZE - 1) / PAGE_SIZE) as usize;
+            phymem::reserve(slice).unwrap();
+            for page in 0..page_count {
+                mmu::virt2pte_mut(pointer + page * PAGE_SIZE as usize, |pte| {
+                    let (pte, offset) = pte.unwrap();
+                    const PAGE_FLAGS: u64 = mmu::PT_BLOCK
+                        | mmu::PT_AF
+                        | mmu::PT_OSH
+                        | mmu::PT_DEV
+                        | mmu::PT_RW
+                        | mmu::PT_NX;
+                    let prev_ptr = *pte & 0xfffff000;
+                    *pte = prev_ptr | PAGE_FLAGS;
+                });
+            }
+
+            println!("Framebuffer OK");
         }
         // FIXME: Vulnerability
         unsafe {
@@ -85,6 +125,18 @@ static mut DRIVER: Driver = Driver {
             },
         }]),
     }),
+    fb_info: Mutex::new(FramebufferInfo {
+        width: 0,
+        height: 0,
+        virt_width: 0,
+        virt_height: 0,
+        pitch: 0,
+        depth: 0,
+        x_offset: 0,
+        y_offset: 0,
+        pointer: 0,
+        size: 0,
+    }),
 };
 
 #[link_section = ".drivers"]
@@ -101,8 +153,8 @@ impl fi::Control for Device {
     async fn call(&self, msg: FramebufferCM) -> IoResult<()> {
         match msg {
             FramebufferCM::DrawExample { variant } => {
-                let fb_info = unsafe { (&FB_INFO as *const FramebufferInfo).read_volatile() };
-                let fb: *mut u8 = (fb_info.pointer & 0x3FFFFFFF) as usize as *mut u8;
+                let fb_info = unsafe { DRIVER.fb_info.lock() };
+                let fb: *mut u8 = fb_info.pointer as usize as *mut u8;
                 let width = fb_info.width;
                 let height = fb_info.height;
                 let pitch = fb_info.pitch;
@@ -111,7 +163,7 @@ impl fi::Control for Device {
                     for y in 0..height {
                         for x in 0..width {
                             unsafe {
-                                let pixel = fb.offset((y * pitch + x * 3) as isize);
+                                let pixel = fb.offset((y * pitch + x * 4) as isize);
                                 pixel.offset(0).write_volatile(((x + variant) % 256) as u8);
                                 pixel.offset(1).write_volatile((y % 256) as u8);
                                 pixel.offset(2).write_volatile(0);
@@ -126,21 +178,21 @@ impl fi::Control for Device {
                 row,
                 col,
             } => {
-                let fb_info = unsafe { (&FB_INFO as *const FramebufferInfo).read_volatile() };
-                let fb: *mut u8 = (fb_info.pointer & 0x3FFFFFFF) as usize as *mut u8;
+                let fb_info = unsafe { DRIVER.fb_info.lock() };
+                let fb: *mut u8 = fb_info.pointer as usize as *mut u8;
                 let pitch = fb_info.pitch;
 
                 if !fb.is_null() {
                     let char = char as usize;
-                    let char = font[char * 8 * 16 * 3..(char + 1) * 8 * 16 * 3].as_ptr();
+                    let char = font[char * 8 * 16 * 4..(char + 1) * 8 * 16 * 4].as_ptr();
 
                     for y in 0..16 {
                         unsafe {
                             let dst = fb.offset(
-                                (row as isize * 16 + y) * (pitch as isize) + col as isize * 8 * 3,
+                                (row as isize * 16 + y) * (pitch as isize) + col as isize * 8 * 4,
                             );
-                            let src = char.offset(y * 8 * 3);
-                            for x in 0..(8 * 3) {
+                            let src = char.offset(y * 8 * 4);
+                            for x in 0..(8 * 4) {
                                 dst.offset(x).write_volatile(*src.offset(x));
                             }
                         }

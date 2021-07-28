@@ -29,6 +29,7 @@ mod lang_items;
 pub(crate) mod utils;
 
 use crate::arch::aarch64::phymem::PhyAddr;
+use crate::arch::aarch64::uart1::init_uart1;
 use crate::console::{dump_hex, dump_hex_slice};
 use crate::ErrWarn;
 use core::ops::Deref;
@@ -51,13 +52,31 @@ unsafe fn syscall1(num: usize, mut arg1: usize) -> usize {
 /// This function assumes it runs only once, on a clean machine
 #[no_mangle]
 pub unsafe extern "C" fn kmain(dtb_addr: *const u8) {
+    init_uart1();
     // Init mmu so devices work
     mmu::init().unwrap();
 
-    // Memory allocator
+    // Earlycon
+    console::set_main_console_by_name(b"Raspberry Pi 3 UART1");
+    println!("[INFO] Early console working");
+
+    let mac = mailbox_methods::get_nic_mac().unwrap();
+    println!(
+        "[INFO] MAC Address = {:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+        mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]
+    );
+
+    // Physical Memory allocator
     {
         let mut phymem = phymem::PHYMEM_FREE_LIST.lock();
         phymem.init();
+    }
+
+    driver_manager::early_init_all_drivers();
+
+    // Virtual Memory allocator
+    {
+        let mut phymem = phymem::PHYMEM_FREE_LIST.lock();
         let kernel_virtmem = phymem
             .alloc_pages(16384) // 64MiB
             .expect("Failed to allocate dynamic kernel memory");
@@ -72,52 +91,50 @@ pub unsafe extern "C" fn kmain(dtb_addr: *const u8) {
 
     // Early console
     driver_manager::init_driver_by_name(b"Raspberry Pi 3 UART1").warn();
-    console::set_main_console_by_name(b"Raspberry Pi 3 UART1");
     println!("--- Bold Kernel v{} ---", env!("CARGO_PKG_VERSION"));
-    println!("[INFO] Early console working");
 
-    // IPC test
-    // ktask::SimpleExecutor::run_blocking(ktask::Task::new_raw(Box::pin(ipc::test())));
-
-    println!("[DBUG] virt2phy tests:");
-    for addr in [
-        0,
-        0x1000,
-        0x1234,
-        0x80000,
-        0x1f4 << 21,
-        (0x1f4 << 21) + 0x12345,
-        0x1f5 << 21,
-        0x1f6 << 21,
-        0x1f7 << 21,
-        0x1f7 << 21,
-        0x200 << 21,
-    ] {
-        println!("V2P(0x{:x}) -> {:?}", addr, mmu::virt2phy(addr));
-    }
-
-    // Map some page
-    const PAGE_FLAGS: u64 = mmu::PT_USER | // non-privileged
-        mmu::PT_ISH | // inner shareable
-        mmu::PT_MEM; // normal memory;
-    mmu::vmap(0x40000000, PhyAddr(0x80000), PAGE_FLAGS).unwrap();
-    println!(
-        "[DBUG] Accessing kernel code at {:?} via mapping at 0x{:x}",
-        PhyAddr(0x80000),
-        0x40000000
-    );
-    dump_hex_slice(&*slice_from_raw_parts(0x40000000 as *const u8, 64));
-    mmu::vunmap(0x40000000).unwrap();
-    // The following line will crash as expected:
+    // // IPC test
+    // // ktask::SimpleExecutor::run_blocking(ktask::Task::new_raw(Box::pin(ipc::test())));
+    //
+    // println!("[DBUG] virt2phy tests:");
+    // for addr in [
+    //     0,
+    //     0x1000,
+    //     0x1234,
+    //     0x80000,
+    //     0x1f4 << 21,
+    //     (0x1f4 << 21) + 0x12345,
+    //     0x1f5 << 21,
+    //     0x1f6 << 21,
+    //     0x1f7 << 21,
+    //     0x1f7 << 21,
+    //     0x200 << 21,
+    // ] {
+    //     println!("V2P(0x{:x}) -> {:?}", addr, mmu::virt2phy(addr));
+    // }
+    //
+    // // Map some page
+    // const PAGE_FLAGS: u64 = mmu::PT_USER | // non-privileged
+    //     mmu::PT_ISH | // inner shareable
+    //     mmu::PT_MEM; // normal memory;
+    // mmu::vmap(0x40000000, PhyAddr(0x80000), PAGE_FLAGS).unwrap();
+    // println!(
+    //     "[DBUG] Accessing kernel code at {:?} via mapping at 0x{:x}",
+    //     PhyAddr(0x80000),
+    //     0x40000000
+    // );
     // dump_hex_slice(&*slice_from_raw_parts(0x40000000 as *const u8, 64));
-
-    // Test it
-    {
-        let heap_val = Box::new(123);
-        let heap_val2 = Box::new(321);
-        println!("[DBUG] Boxed val: {} (at &{:p})", heap_val, &heap_val);
-        println!("[DBUG] Boxed val2: {} (at &{:p})", heap_val2, &heap_val2);
-    }
+    // mmu::vunmap(0x40000000).unwrap();
+    // // The following line will crash as expected:
+    // // dump_hex_slice(&*slice_from_raw_parts(0x40000000 as *const u8, 64));
+    //
+    // // Test it
+    // {
+    //     let heap_val = Box::new(123);
+    //     let heap_val2 = Box::new(321);
+    //     println!("[DBUG] Boxed val: {} (at &{:p})", heap_val, &heap_val);
+    //     println!("[DBUG] Boxed val2: {} (at &{:p})", heap_val2, &heap_val2);
+    // }
 
     println!("[INFO] Loaded drivers: {:?}", driver_manager::drivers());
 
@@ -128,8 +145,8 @@ pub unsafe extern "C" fn kmain(dtb_addr: *const u8) {
     // println!("[INFO] Main console working");
 
     // Get kernel command line
-    let args = mailbox_methods::get_kernel_args().unwrap();
-    println!("[INFO] Kernel command line: {:?}", args.deref());
+    // let args = mailbox_methods::get_kernel_args().unwrap();
+    // println!("[INFO] Kernel command line: {:?}", args.deref());
 
     if !dtb_addr.is_null() {
         println!("[DBUG] DTB snippet:");
@@ -154,17 +171,17 @@ pub unsafe extern "C" fn kmain(dtb_addr: *const u8) {
     framebuffer_console::init();
 
     // Spawn some more tasks
-    async fn example_task(id: usize) {
-        let mut i = 0;
-        loop {
-            println!("[DBUG] Hello from task #{}: {}", id, i + 1);
-            delay_us(1000000).await; // 1 second
-            i += 1;
-        }
-    }
-    spawn_task!({ example_task(1).await });
-    spawn_task!({ example_task(2).await });
-    spawn_task!({ example_task(3).await });
+    // async fn example_task(id: usize) {
+    //     let mut i = 0;
+    //     loop {
+    //         println!("[DBUG] Hello from task #{}: {}", id, i + 1);
+    //         delay_us(1000000).await; // 1 second
+    //         i += 1;
+    //     }
+    // }
+    // spawn_task!({ example_task(1).await });
+    // spawn_task!({ example_task(2).await });
+    // spawn_task!({ example_task(3).await });
 
     // Spawn echo task (WIP: Not working yet)
     // spawn_task!({
@@ -256,6 +273,7 @@ pub unsafe extern "C" fn kmain(dtb_addr: *const u8) {
 
     ktask::run();
 
+    println!("[Done]");
     loop {
         asm!("wfe");
     }

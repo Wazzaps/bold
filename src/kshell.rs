@@ -1,5 +1,6 @@
 #![allow(clippy::never_loop)]
 
+use crate::framebuffer_console;
 use crate::ktask;
 use crate::AsciiStr;
 use crate::{fonts, ipc};
@@ -269,6 +270,7 @@ impl KShell {
                              ls <PATH>   : List directory\n\
                              tree <PATH> : List directory recursively\n\
                              cd <PATH>   : Change directory\n\
+                             info        : Display system info\n\
                              font <FONT> : Change framebuffer font"
                         );
                     }
@@ -276,6 +278,7 @@ impl KShell {
                     b"tree" => self.handle_cmd_tree(&words).await,
                     b"cd" => self.handle_cmd_cd(&words).await,
                     b"font" => self.handle_cmd_font(&words).await,
+                    b"info" => self.handle_cmd_info(&words).await,
                     _ => {
                         queue_writeln!(
                             self.output.clone(),
@@ -417,6 +420,14 @@ impl KShell {
         } else {
             queue_writeln!(self.output.clone(), "Error: Directory doesn't exist");
         }
+    }
+
+    async fn handle_cmd_info(&mut self, _words: &[&[u8]]) {
+        queue_writeln!(
+            self.output.clone(),
+            "Framebuffer Console:\n  {:?}",
+            framebuffer_console::perf_report()
+        );
     }
 }
 
