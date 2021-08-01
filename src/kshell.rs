@@ -428,6 +428,11 @@ impl KShell {
             "Framebuffer Console:\n  {:?}",
             framebuffer_console::perf_report()
         );
+        queue_writeln!(
+            self.output.clone(),
+            "Scheduler:\n  {:?}",
+            ktask::perf_report()
+        );
     }
 }
 

@@ -60,11 +60,11 @@ pub unsafe extern "C" fn kmain(dtb_addr: *const u8) {
     console::set_main_console_by_name(b"Raspberry Pi 3 UART1");
     println!("[INFO] Early console working");
 
-    let mac = mailbox_methods::get_nic_mac().unwrap();
-    println!(
-        "[INFO] MAC Address = {:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
-        mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]
-    );
+    // let mac = mailbox_methods::get_nic_mac().unwrap();
+    // println!(
+    //     "[INFO] MAC Address = {:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+    //     mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]
+    // );
 
     // Physical Memory allocator
     {
@@ -81,6 +81,16 @@ pub unsafe extern "C" fn kmain(dtb_addr: *const u8) {
             .alloc_pages(16384) // 64MiB
             .expect("Failed to allocate dynamic kernel memory");
         virtmem::init(kernel_virtmem);
+    }
+
+    if !dtb_addr.is_null() {
+        println!("[DBUG] DTB @ {:p} snippet:", dtb_addr);
+        let something = &*slice_from_raw_parts(dtb_addr, 128);
+        dump_hex_slice(something);
+        println!("[DBUG] Parsed:");
+        arch::aarch64::dtb::parse(dtb_addr);
+    } else {
+        println!("[DBUG] No DTB given");
     }
 
     // IPC
@@ -148,19 +158,11 @@ pub unsafe extern "C" fn kmain(dtb_addr: *const u8) {
     // let args = mailbox_methods::get_kernel_args().unwrap();
     // println!("[INFO] Kernel command line: {:?}", args.deref());
 
-    if !dtb_addr.is_null() {
-        println!("[DBUG] DTB snippet:");
-        let something = &*slice_from_raw_parts(dtb_addr, 128);
-        dump_hex_slice(something);
-    } else {
-        println!("[DBUG] No DTB given");
-    }
-
     driver_manager::init_all_drivers();
 
     // Get root clock
-    let rate = mailbox_methods::get_clock_rate(0).unwrap();
-    println!("[INFO] Root clock = {}", rate);
+    // let rate = mailbox_methods::get_clock_rate(0).unwrap();
+    // println!("[INFO] Root clock = {}", rate);
 
     // Generate a random number
     // entropy::init();
@@ -197,12 +199,12 @@ pub unsafe extern "C" fn kmain(dtb_addr: *const u8) {
     // Call syscall (not yet implemented)
     // println!("result = 0x{:x}", syscall1(123, 321));
 
-    let mut sdhc = arch::aarch64::sdhc::Sdhc::init().unwrap();
-    let mut buf = [0; 512 / 4];
-    sdhc.read_block(0, &mut buf).unwrap();
-
-    println!("[INFO] EMMC: First block: ");
-    dump_hex(&buf);
+    // let mut sdhc = arch::aarch64::sdhc::Sdhc::init().unwrap();
+    // let mut buf = [0; 512 / 4];
+    // sdhc.read_block(0, &mut buf).unwrap();
+    //
+    // println!("[INFO] EMMC: First block: ");
+    // dump_hex(&buf);
 
     // Modify first dword to demonstrate writing
     // buf[0] = 0xdeadbeef;

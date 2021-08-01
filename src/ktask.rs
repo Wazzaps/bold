@@ -1,3 +1,4 @@
+use crate::arch::aarch64::mmio::get_uptime_us;
 use alloc::boxed::Box;
 use alloc::collections::VecDeque;
 use core::ptr::null;
@@ -6,6 +7,52 @@ use core::{future::Future, pin::Pin};
 use spin::{Mutex, Once};
 
 pub(crate) static EXECUTOR: Once<SimpleExecutor> = Once::new();
+static PERF_INFO: Mutex<PerfInfo> = Mutex::new(PerfInfo::new());
+
+pub struct PerfInfo {
+    pub boot_time_us: u64,
+    pub cpu_time_us: u64,
+    pub total_yields: u64,
+    pub tasks_spawned: u64,
+    pub tasks_killed: u64,
+}
+
+#[derive(Debug)]
+pub struct PerfReport {
+    uptime_us: u64,
+    cpu_time_us: u64,
+    total_yields: u64,
+    avg_time_between_yields_us: u64,
+    tasks_spawned: u64,
+    tasks_killed: u64,
+    current_tasks: u64,
+}
+
+impl PerfInfo {
+    const fn new() -> Self {
+        Self {
+            boot_time_us: 0,
+            cpu_time_us: 0,
+            total_yields: 0,
+            tasks_spawned: 0,
+            tasks_killed: 0,
+        }
+    }
+
+    fn report(&self) -> PerfReport {
+        let avg_time_between_yields_us =
+            self.cpu_time_us.checked_div(self.total_yields).unwrap_or(0);
+        PerfReport {
+            uptime_us: get_uptime_us() - self.boot_time_us,
+            cpu_time_us: self.cpu_time_us,
+            total_yields: self.total_yields,
+            avg_time_between_yields_us,
+            tasks_spawned: self.tasks_spawned,
+            tasks_killed: self.tasks_killed,
+            current_tasks: self.tasks_spawned - self.tasks_killed,
+        }
+    }
+}
 
 pub struct Task {
     future: Pin<Box<(dyn Future<Output = ()> + Send)>>,
@@ -40,6 +87,8 @@ impl SimpleExecutor {
 
     pub fn spawn(&self, task: Task) {
         self.task_queue.lock().push_back(task);
+        let mut perf_info = PERF_INFO.lock();
+        perf_info.tasks_spawned += 1;
     }
 
     pub fn run(&self) {
@@ -48,12 +97,23 @@ impl SimpleExecutor {
             if let Some(mut task) = next_task {
                 let waker = dummy_waker();
                 let mut context = Context::from_waker(&waker);
-                match task.poll(&mut context) {
-                    Poll::Ready(()) => {} // task done
+
+                let uptime_before = get_uptime_us();
+                let poll_result = task.poll(&mut context);
+                let uptime_after = get_uptime_us();
+
+                let mut perf_info = PERF_INFO.lock();
+                match poll_result {
+                    Poll::Ready(()) => {
+                        // task done
+                        perf_info.tasks_killed += 1;
+                    }
                     Poll::Pending => {
                         self.task_queue.lock().push_back(task);
                     }
                 }
+                perf_info.total_yields += 1;
+                perf_info.cpu_time_us += uptime_after - uptime_before;
             } else {
                 break;
             }
@@ -107,10 +167,16 @@ impl Future for YieldNow {
 
 pub fn init() {
     EXECUTOR.call_once(SimpleExecutor::new);
+    let mut perf_info = PERF_INFO.lock();
+    perf_info.boot_time_us = get_uptime_us();
 }
 
 pub fn run() {
     EXECUTOR.wait().unwrap().run();
+}
+
+pub fn perf_report() -> PerfReport {
+    PERF_INFO.lock().report()
 }
 
 #[macro_export]
