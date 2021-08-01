@@ -20,7 +20,11 @@ macro_rules! unwrap_variant {
 }
 
 pub fn display_bstr(fmt: &mut fmt::Formatter<'_>, bstr: &[u8]) -> fmt::Result {
-    bstr.iter().try_for_each(|c| fmt.write_char(char::from(*c)))
+    bstr.iter().try_for_each(|c| match c {
+        // Normal letters
+        b' '..=b'~' => fmt.write_char(char::from(*c)),
+        c => write!(fmt, "\\x{:02x}", *c),
+    })
 }
 
 pub struct AsciiStr<'a>(pub &'a [u8]);

@@ -242,7 +242,7 @@ impl KShell {
             if self.colors {
                 queue_write!(self.output.clone(), "\x1b[0m");
             }
-            queue_write!(self.output.clone(), "@bold ipc:");
+            queue_write!(self.output.clone(), "@bold ");
             if self.colors {
                 queue_write!(self.output.clone(), "\x1b[32m");
             }

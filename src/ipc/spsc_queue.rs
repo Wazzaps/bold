@@ -92,7 +92,7 @@ impl IpcNode for IpcSpscQueue {
         None
     }
 
-    async fn queue_write(self: Arc<Self>, data: &[u8]) -> Result<usize, ()> {
+    fn queue_write(self: Arc<Self>, data: &[u8]) -> Result<usize, ()> {
         Ok(self.queue.lock().write(data))
     }
 

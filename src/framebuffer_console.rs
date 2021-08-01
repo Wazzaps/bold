@@ -120,7 +120,7 @@ pub fn init() {
         // let mut buf = [0u8; 1];
         // loop {
         //     if let Ok(1) = fi::Read::read(&DEVICE, &mut buf).await {
-        //         input_queue.queue_write(&buf).await.warn();
+        //         input_queue.queue_write(&buf).warn();
         //     }
         //     yield_now().await;
         // }

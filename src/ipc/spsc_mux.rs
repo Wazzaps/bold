@@ -19,8 +19,8 @@ pub fn mux(input: IpcRef) -> (IpcRef, IpcRef) {
         let mut buf = [0u8; 1];
         loop {
             if let Some(1) = input.queue_read(&mut buf).await {
-                out_queue_1.queue_write(&buf).await.unwrap();
-                out_queue_2.queue_write(&buf).await.unwrap();
+                out_queue_1.queue_write(&buf).unwrap();
+                out_queue_2.queue_write(&buf).unwrap();
             }
             ktask::yield_now().await;
         }

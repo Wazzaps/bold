@@ -38,7 +38,7 @@ pub trait IpcNode {
         id: u64,
         node: Arc<dyn IpcNode + Send + Sync>,
     ) -> Option<IpcRef>;
-    async fn queue_write(self: Arc<Self>, data: &[u8]) -> Result<usize, ()>;
+    fn queue_write(self: Arc<Self>, data: &[u8]) -> Result<usize, ()>;
     async fn queue_read(self: Arc<Self>, dest: &mut [u8]) -> Option<usize>;
     fn describe(&self) -> [u8; 4];
 }
@@ -60,14 +60,14 @@ impl IpcRef {
         self.inner.clone().dir_link(id, node).await
     }
 
-    pub async fn queue_write(&self, data: &[u8]) -> Result<usize, ()> {
-        self.inner.clone().queue_write(data).await
+    pub fn queue_write(&self, data: &[u8]) -> Result<usize, ()> {
+        self.inner.clone().queue_write(data)
     }
 
     pub async fn queue_write_all(&self, mut data: &[u8]) -> Result<(), ()> {
         let mut left = data.len();
         while left > 0 {
-            let newly_written = self.queue_write(data).await?;
+            let newly_written = self.queue_write(data)?;
             if newly_written == 0 {
                 // EOF
                 return Err(());
@@ -153,7 +153,7 @@ pub async fn test() {
     // Write to spsc
     {
         let queue = dir1.dir_get(3).await.unwrap();
-        queue.queue_write(b"Hello").await.unwrap();
+        queue.queue_write(b"Hello").unwrap();
     }
 
     // Read from spsc

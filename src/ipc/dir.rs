@@ -72,7 +72,7 @@ impl IpcNode for IpcDir {
         Some(new_ent)
     }
 
-    async fn queue_write(self: Arc<Self>, _data: &[u8]) -> Result<usize, ()> {
+    fn queue_write(self: Arc<Self>, _data: &[u8]) -> Result<usize, ()> {
         Err(())
     }
 

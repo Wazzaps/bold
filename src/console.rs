@@ -85,13 +85,10 @@ impl fmt::Write for FmtQueueWriteAdapter {
     fn write_str(&mut self, s: &str) -> fmt::Result {
         let queue = self.0.clone();
         let s = s.to_string();
-        ktask::SimpleExecutor::run_blocking(ktask::Task::new_raw(Box::pin(async move {
-            queue
-                .queue_write_all(s.as_bytes())
-                .await
-                .map_err(|_| fmt::Error)
-                .warn();
-        })));
+        queue
+            .queue_write(s.as_bytes())
+            .map_err(|_| fmt::Error)
+            .warn();
         Ok(())
     }
 }
