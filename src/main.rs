@@ -11,7 +11,7 @@
 
 extern crate alloc;
 
-use crate::arch::aarch64::mmio::delay_us;
+use crate::arch::aarch64::mmio::{delay_us, delay_us_sync};
 use crate::arch::aarch64::{mailbox_methods, mmu, phymem, virtmem};
 use alloc::boxed::Box;
 
@@ -127,6 +127,14 @@ unsafe extern "C" fn kmain_on_stack(dtb_addr: *const u8) -> ! {
 
     // Should be skipped by exception handler
     *(0x99999999 as *mut u8) = 0xaa;
+
+    // Test timer (interrupts not working yet)
+    set_msr!(CNTP_TVAL_EL0, 10000);
+    set_msr!(CNTP_CTL_EL0, 3);
+    for i in 0..10 {
+        println!("{} {:x}", get_msr!(CNTP_CTL_EL0), get_msr!(CNTP_TVAL_EL0));
+        delay_us_sync(1);
+    }
 
     // // IPC test
     // // ktask::SimpleExecutor::run_blocking(ktask::Task::new_raw(Box::pin(ipc::test())));

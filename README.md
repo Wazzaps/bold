@@ -69,7 +69,7 @@ Mix of:
 - [x] CI with Docker + GH actions
 - [ ] Dynamically sized virtual allocator for kernel data
     - [x] Dynamically map pages and allocate page tables
-- [ ] Exception handling
+- [x] Exception handling
 - [ ] Make use of DTB
 - [ ] Parse tar initrd
 - [ ] Run code in EL0 (usermode)
