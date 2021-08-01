@@ -10,6 +10,7 @@ pub(crate) mod phymem;
 // pub(crate) mod qemu_uart;
 pub(crate) mod sdhc;
 // pub(crate) mod uart;
+pub(crate) mod dtb;
 pub(crate) mod uart1;
 pub(crate) mod virtmem;
 

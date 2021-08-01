@@ -70,12 +70,14 @@ Mix of:
 - [ ] Dynamically sized virtual allocator for kernel data
     - [x] Dynamically map pages and allocate page tables
 - [ ] Exception handling
+- [ ] Make use of DTB
 - [ ] Parse tar initrd
 - [ ] Run code in EL0 (usermode)
 - [ ] Paging for usermode
 - [ ] FAT32 driver
 - [x] IPC layer (basic)
 - [ ] VFS layer?
+- [ ] Structured Exception Handling
 - [ ] Simple Bluetooth
 - [ ] Power management for RPI3
 - [ ] USB

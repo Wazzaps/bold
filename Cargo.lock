@@ -31,11 +31,18 @@ version = "0.1.0"
 dependencies = [
  "arrayvec",
  "async-trait",
+ "dtb",
  "futures",
  "linked_list_allocator",
  "qemu-exit",
  "spin",
 ]
+
+[[package]]
+name = "dtb"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be6c6e1672a044abd9652045ba11beb1c7fbec7e5262dcba54795e82aa577971"
 
 [[package]]
 name = "futures"
