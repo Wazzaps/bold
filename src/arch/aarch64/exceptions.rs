@@ -25,7 +25,7 @@ pub struct ExceptionContext {
 }
 
 #[no_mangle]
-pub unsafe fn exception_handler2(e: &ExceptionContext) -> ! {
+pub unsafe fn exception_handler2(e: &mut ExceptionContext) {
     println!("-------------------------------------------");
     // let sp = (e as *const ExceptionContext as *const u8)
     //     .offset(size_of::<ExceptionContext>() as isize) as *const u64;
@@ -38,10 +38,15 @@ pub unsafe fn exception_handler2(e: &ExceptionContext) -> ! {
     println!("FAR (Address accessed): 0x{:x}", get_msr!(far_el1));
     println!("PC: 0x{:x}", e.elr_el1);
     println!("LR: 0x{:x}", e.lr);
-    // println!("SP: {:p}", sp);
+    println!("SP: {:016x}", get_msr!(sp_el0));
     println!("SPSR: 0x{:x}", e.spsr_el1);
     println!("-------------------------------------------");
-    loop {
-        asm!("wfe");
+
+    if get_msr!(esr_el1) == 0x96000045 {
+        e.elr_el1 += 4;
+    } else {
+        loop {
+            asm!("wfe");
+        }
     }
 }

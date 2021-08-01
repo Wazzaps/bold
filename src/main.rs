@@ -50,8 +50,9 @@ unsafe fn syscall1(num: usize, mut arg1: usize) -> usize {
 /// # Safety
 ///
 /// This function assumes it runs only once, on a clean machine
+/// It also assumes dtb_addr is either a valid dtb or null
 #[no_mangle]
-pub unsafe extern "C" fn kmain(dtb_addr: *const u8) {
+pub unsafe extern "C" fn kmain(dtb_addr: *const u8) -> ! {
     init_uart1();
     // Init mmu so devices work
     mmu::init().unwrap();
@@ -74,6 +75,27 @@ pub unsafe extern "C" fn kmain(dtb_addr: *const u8) {
 
     driver_manager::early_init_all_drivers();
 
+    // Create new stack for interrupts
+    let core0_stack = {
+        let mut phymem = phymem::PHYMEM_FREE_LIST.lock();
+        phymem
+            .alloc_pages(64) // 256KiB
+            .expect("Failed to allocate core 0 stack")
+    };
+
+    println!("[DBUG] core 0 stack at: {:?}", core0_stack);
+    asm!(
+        "mov sp, {:x}",
+        "mov x0, {:x}",
+        "b kmain_on_stack",
+        in(reg) core0_stack.base.0 + core0_stack.len,
+        in(reg) dtb_addr,
+        options(noreturn)
+    )
+}
+
+#[no_mangle]
+unsafe extern "C" fn kmain_on_stack(dtb_addr: *const u8) -> ! {
     // Virtual Memory allocator
     {
         let mut phymem = phymem::PHYMEM_FREE_LIST.lock();
@@ -102,6 +124,9 @@ pub unsafe extern "C" fn kmain(dtb_addr: *const u8) {
     // Early console
     driver_manager::init_driver_by_name(b"Raspberry Pi 3 UART1").warn();
     println!("--- Bold Kernel v{} ---", env!("CARGO_PKG_VERSION"));
+
+    // Should be skipped by exception handler
+    *(0x99999999 as *mut u8) = 0xaa;
 
     // // IPC test
     // // ktask::SimpleExecutor::run_blocking(ktask::Task::new_raw(Box::pin(ipc::test())));
