@@ -254,11 +254,11 @@ pub fn init() {
 }
 
 pub fn run() {
-    EXECUTOR.wait().unwrap().run();
+    EXECUTOR.wait().run();
 }
 
 pub fn proc_list() -> Vec<TaskPerfInfo> {
-    EXECUTOR.wait().unwrap().proc_list()
+    EXECUTOR.wait().proc_list()
 }
 
 pub fn perf_report() -> PerfReport {
@@ -268,7 +268,7 @@ pub fn perf_report() -> PerfReport {
 #[macro_export]
 macro_rules! spawn_task {
     ($name: expr, $b:block) => {{
-        let executor = crate::ktask::EXECUTOR.wait().unwrap();
+        let executor = crate::ktask::EXECUTOR.wait();
         let closure = async move || ($b);
         executor.spawn(crate::ktask::Task::new_raw($name, Box::pin(closure())));
     }};
