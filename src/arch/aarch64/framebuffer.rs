@@ -83,7 +83,7 @@ impl driver_manager::Driver for Driver {
             phymem::reserve(slice).unwrap();
             for page in 0..page_count {
                 mmu::virt2pte_mut(pointer + page * PAGE_SIZE as usize, |pte| {
-                    let (pte, offset) = pte.unwrap();
+                    let (pte, _offset) = pte.unwrap();
                     const PAGE_FLAGS: u64 = mmu::PT_BLOCK
                         | mmu::PT_AF
                         | mmu::PT_OSH

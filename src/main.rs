@@ -131,7 +131,7 @@ unsafe extern "C" fn kmain_on_stack(dtb_addr: *const u8) -> ! {
     // Test timer (interrupts not working yet)
     set_msr!(CNTP_TVAL_EL0, 10000);
     set_msr!(CNTP_CTL_EL0, 3);
-    for i in 0..10 {
+    for _ in 0..10 {
         println!("{} {:x}", get_msr!(CNTP_CTL_EL0), get_msr!(CNTP_TVAL_EL0));
         delay_us_sync(1);
     }

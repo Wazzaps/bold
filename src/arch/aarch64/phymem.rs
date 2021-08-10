@@ -48,7 +48,7 @@ impl ops::Sub for FreeRange {
     type Output = (Option<FreeRange>, Option<FreeRange>);
 
     fn sub(self, rhs: Self) -> Self::Output {
-        return if rhs.base < self.base {
+        if rhs.base < self.base {
             // Reserved region starts before us
             if rhs.base + rhs.len > self.base {
                 // Reserved region intersects us on the left
@@ -73,22 +73,22 @@ impl ops::Sub for FreeRange {
                 (Some(self), None)
             } else {
                 // Reserved region starts before our end
+
+                let mut left = self;
+                left.len = rhs.base - self.base;
+
                 if rhs.base + rhs.len >= self.base + self.len {
                     // Reserved region ends after us
-                    let mut new = self;
-                    new.len = rhs.base - self.base;
-                    (Some(new), None)
+                    (Some(left), None)
                 } else {
                     // Reserved region ends inside of us, need to split
-                    let mut left = self;
-                    left.len = rhs.base - self.base;
                     let mut right = self;
                     right.base = rhs.base + rhs.len;
                     right.len = self.len - rhs.len - left.len;
                     (Some(left), Some(right))
                 }
             }
-        };
+        }
     }
 }
 
