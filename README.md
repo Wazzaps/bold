@@ -25,11 +25,10 @@ Mix of:
 - Install rust:
   - `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
     - (Default everything)
-  - `cargo install xargo`
   - `rustup component add rust-src`
   - `rustup override set nightly`
 - Run it:
-  - `xargo run --release`
+  - `cargo run --release`
 
 ## Development environment (linux) - without GUI
 
@@ -40,17 +39,16 @@ Mix of:
   - `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
     - (Default everything)
     - `source $HOME/.cargo/env`
-  - `cargo install xargo`
   - `rustup override set nightly`
   - `rustup component add rust-src`
 - Run it:
-  - `xargo run --release -- -nographic -monitor none`
+  - `cargo run --release -- -nographic -monitor none`
 
 ## Extra stuff
 
 ### GDB
 
-- Run the kernel (either `xargo run --release` or `xargo run-stopped`)
+- Run the kernel (either `cargo run --release` or `cargo run-stopped`)
 - `./scripts/gdb_attach.sh`
 
 ### Parsing exceptions

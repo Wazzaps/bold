@@ -22,18 +22,15 @@ jobs:
           path: |
             /tmp/cargo-registry-cache
             /tmp/build-cache
-            /tmp/xargo-cache
-      - name: rustup show and home
-        run: docker run --rm -w /wd -v ${{github.workspace}}:/wd -v /tmp/cargo-registry-cache:/root/.cargo/registry -v /tmp/xargo-cache:/root/.xargo -v /tmp/build-cache:/wd/target wazzaps/boldos-build 'bash' '-c' '. $HOME/.cargo/env && rustup show && echo $HOME && echo --- && env'
       - name: Build
-        run: docker run --rm -w /wd -v ${{github.workspace}}:/wd -v /tmp/cargo-registry-cache:/root/.cargo/registry -v /tmp/xargo-cache:/root/.xargo -v /tmp/build-cache:/wd/target wazzaps/boldos-build 'bash' '-c' '. $HOME/.cargo/env && xargo build --release'
+        run: docker run --rm -w /wd -v ${{github.workspace}}:/wd -v /tmp/cargo-registry-cache:/root/.cargo/registry -v /tmp/build-cache:/wd/target wazzaps/boldos-build 'bash' '-c' '. $HOME/.cargo/env && cargo build --release'
       - name: Clippy
-        run: docker run --rm -w /wd -v ${{github.workspace}}:/wd -v /tmp/cargo-registry-cache:/root/.cargo/registry -v /tmp/xargo-cache:/root/.xargo -v /tmp/build-cache:/wd/target wazzaps/boldos-build 'bash' '-c' '. $HOME/.cargo/env && cargo clippy --release'
-      #        continue-on-error: true
+        run: docker run --rm -w /wd -v ${{github.workspace}}:/wd -v /tmp/cargo-registry-cache:/root/.cargo/registry -v /tmp/build-cache:/wd/target wazzaps/boldos-build 'bash' '-c' '. $HOME/.cargo/env && cargo clippy --release'
+#        continue-on-error: true
       - name: Build Kernel Accessories
-        run: docker run --rm -w /wd -v ${{github.workspace}}:/wd -v /tmp/cargo-registry-cache:/root/.cargo/registry -v /tmp/xargo-cache:/root/.xargo -v /tmp/build-cache:/wd/target wazzaps/boldos-build 'bash' '-c' '. $HOME/.cargo/env && ./scripts/prepare_kernel_accessories.sh target/aarch64-none-elf/release/boldos'
+        run: docker run --rm -w /wd -v ${{github.workspace}}:/wd -v /tmp/cargo-registry-cache:/root/.cargo/registry -v /tmp/build-cache:/wd/target wazzaps/boldos-build 'bash' '-c' '. $HOME/.cargo/env && ./scripts/prepare_kernel_accessories.sh target/aarch64-none-elf/release/boldos'
       - name: Fix cache permissions
-        run: sudo chmod -R a+rwx /tmp/cargo-registry-cache /tmp/build-cache /tmp/xargo-cache
+        run: sudo chmod -R a+rwx /tmp/cargo-registry-cache /tmp/build-cache
       - name: Upload artifacts
         uses: actions/upload-artifact@v2
         with:
