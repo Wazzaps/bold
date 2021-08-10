@@ -31,4 +31,4 @@ async-trait = "0.1.50"
 futures = { version = "0.3", default-features = false, features = ["alloc"] }
 arrayvec = { version = "0.7.1", default-features = false }
 dtb = "0.2.0"
-tar-parser = { path = "externals/tar-parser.rs" }
+tar-parser = { path = "externals/tar-parser.rs", default-features = false}
