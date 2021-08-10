@@ -2,7 +2,7 @@
 name = "boldos"
 version = "0.1.0"
 edition = "2018"
-repository = "https://github.com/keruspe/tar.rs"
+repository = "https://github.com/Wazzaps/bold"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
