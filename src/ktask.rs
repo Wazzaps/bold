@@ -5,14 +5,14 @@ use alloc::collections::VecDeque;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::ptr::null;
-use core::sync::atomic::{AtomicU64, Ordering};
+use core::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use core::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 use core::{future::Future, pin::Pin};
 use spin::{Mutex, Once, RwLock};
 
 pub(crate) static EXECUTOR: Once<SimpleExecutor> = Once::new();
 static PERF_INFO: Mutex<PerfInfo> = Mutex::new(PerfInfo::new());
-static PID_COUNTER: AtomicU64 = AtomicU64::new(1);
+static PID_COUNTER: AtomicUsize = AtomicUsize::new(1);
 
 pub struct PerfInfo {
     pub cpu_time_us: u64,
@@ -58,7 +58,7 @@ impl PerfInfo {
 }
 
 pub struct TaskPerfInfo {
-    pub id: u64,
+    pub id: usize,
     pub name: &'static [u8],
     pub uptime_us: u64,
     pub cpu_time_us: u64,
@@ -66,7 +66,7 @@ pub struct TaskPerfInfo {
 }
 
 pub struct Task {
-    id: u64,
+    id: usize,
     name: &'static [u8],
     start_time_us: u64,
     cpu_time_us: u64,
@@ -107,7 +107,7 @@ impl Task {
 
 pub struct SimpleExecutor {
     tasks: Mutex<Vec<Arc<RwLock<Task>>>>,
-    run_queue: Mutex<VecDeque<u64>>,
+    run_queue: Mutex<VecDeque<usize>>,
 }
 
 impl SimpleExecutor {
@@ -130,7 +130,7 @@ impl SimpleExecutor {
         loop {
             let next_task = self.run_queue.lock().pop_front();
             if let Some(task_id) = next_task {
-                let waker = dummy_waker();
+                let waker = run_queue_waker(task_id);
                 let mut context = Context::from_waker(&waker);
 
                 let mut found_task = None;
@@ -175,7 +175,7 @@ impl SimpleExecutor {
                             tasks.remove(idx);
                         }
                         Poll::Pending => {
-                            self.run_queue.lock().push_back(task_id);
+                            // task still needs to run
                         }
                     }
                 }
@@ -184,12 +184,6 @@ impl SimpleExecutor {
                 break;
             }
         }
-    }
-
-    pub fn run_blocking(task: Task) {
-        let executor = SimpleExecutor::new();
-        executor.spawn(task);
-        executor.run();
     }
 
     pub fn proc_list(&self) -> Vec<TaskPerfInfo> {
@@ -211,18 +205,24 @@ impl SimpleExecutor {
     }
 }
 
-fn dummy_raw_waker() -> RawWaker {
+fn run_queue_raw_waker(task_id: usize) -> RawWaker {
     fn no_op(_: *const ()) {}
-    fn clone(_: *const ()) -> RawWaker {
-        dummy_raw_waker()
+    fn clone(task_id: *const ()) -> RawWaker {
+        run_queue_raw_waker(task_id as usize)
+    }
+    fn wake(task_id: *const ()) {
+        EXECUTOR.wait().run_queue.lock().push_back(task_id as usize);
+    }
+    fn wake_by_ref(task_id: *const ()) {
+        EXECUTOR.wait().run_queue.lock().push_back(task_id as usize);
     }
 
-    let vtable = &RawWakerVTable::new(clone, no_op, no_op, no_op);
-    RawWaker::new(null(), vtable)
+    let vtable = &RawWakerVTable::new(clone, wake, wake_by_ref, no_op);
+    RawWaker::new(task_id as *const (), vtable)
 }
 
-fn dummy_waker() -> Waker {
-    unsafe { Waker::from_raw(dummy_raw_waker()) }
+fn run_queue_waker(task_id: usize) -> Waker {
+    unsafe { Waker::from_raw(run_queue_raw_waker(task_id)) }
 }
 
 #[inline]
