@@ -1,5 +1,9 @@
 # BoldOS
 
+[![GitHub Workflow Status](https://img.shields.io/github/workflow/status/Wazzaps/bold/CI?style=flat-square)](https://github.com/yzhang-gh/vscode-markdown/actions)
+[![GitHub stars](https://img.shields.io/github/stars/Wazzaps/bold.svg?style=flat-square&label=github%20stars)](https://github.com/yzhang-gh/vscode-markdown)
+[![GitHub Contributors](https://img.shields.io/github/contributors/Wazzaps/bold.svg?style=flat-square)](https://github.com/yzhang-gh/vscode-markdown/graphs/contributors)
+
 Tested on Raspberry pi 3 on QEMU
 
 Mix of:
@@ -8,6 +12,7 @@ Mix of:
 - `https://github.com/bztsrc/raspi3-tutorial`
 - `https://wiki.osdev.org/Raspberry_Pi_Bare_Bones`
 - My ideas
+---
 
 ## Screenshot
 
