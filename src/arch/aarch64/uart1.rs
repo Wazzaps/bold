@@ -66,7 +66,7 @@ impl driver_manager::Driver for Driver {
             (*self.info.get()).initialized = true;
         }
 
-        spawn_task!({
+        spawn_task!(b"UART1.input", {
             // Create the input queue
             let root = ipc::ROOT.read().as_ref().unwrap().clone();
             let input_queue = root
@@ -93,7 +93,7 @@ impl driver_manager::Driver for Driver {
             }
         });
 
-        spawn_task!({
+        spawn_task!(b"UART1.output", {
             // Create the output queue
             let root = ipc::ROOT.read().as_ref().unwrap().clone();
             let output_queue = root

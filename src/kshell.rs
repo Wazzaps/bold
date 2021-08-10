@@ -2,9 +2,9 @@
 
 use crate::framebuffer_console;
 use crate::ktask;
-use crate::AsciiStr;
 use crate::{fonts, ipc};
 use crate::{println, queue_write, queue_writeln, spawn_task};
+use crate::{AsciiStr, DurationFmt};
 use alloc::boxed::Box;
 use alloc::vec;
 use alloc::vec::Vec;
@@ -271,6 +271,7 @@ impl KShell {
                              tree <PATH> : List directory recursively\n\
                              cd <PATH>   : Change directory\n\
                              info        : Display system info\n\
+                             ps          : Process list\n\
                              font <FONT> : Change framebuffer font"
                         );
                     }
@@ -279,6 +280,7 @@ impl KShell {
                     b"cd" => self.handle_cmd_cd(&words).await,
                     b"font" => self.handle_cmd_font(&words).await,
                     b"info" => self.handle_cmd_info(&words).await,
+                    b"ps" => self.handle_cmd_ps(&words).await,
                     _ => {
                         queue_writeln!(
                             self.output.clone(),
@@ -434,11 +436,29 @@ impl KShell {
             ktask::perf_report()
         );
     }
+
+    async fn handle_cmd_ps(&mut self, _words: &[&[u8]]) {
+        queue_writeln!(
+            self.output.clone(),
+            "     PID  Uptime CPUTime   Yields Name"
+        );
+        for task in ktask::proc_list() {
+            queue_writeln!(
+                self.output.clone(),
+                "{: >8} {: >7} {: >7} {: >8} {}",
+                task.id,
+                DurationFmt(task.uptime_us),
+                DurationFmt(task.cpu_time_us),
+                task.total_yields,
+                AsciiStr(task.name),
+            );
+        }
+    }
 }
 
 pub fn launch(input_queue: ipc::IpcRef, output_queue: ipc::IpcRef, colors: bool) {
     println!("[INFO] Starting kshell");
-    spawn_task!({
+    spawn_task!(b"KShell", {
         let root = ipc::ROOT.read().as_ref().unwrap().clone();
 
         // Create shell

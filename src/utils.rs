@@ -43,6 +43,28 @@ impl<'a> Deref for AsciiStr<'a> {
     }
 }
 
+pub struct DurationFmt(pub u64);
+
+impl Display for DurationFmt {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            fmt,
+            "{:02}:{:02}.{:01}",
+            self.0 / 60000000,
+            self.0 % 60000000 / 1000000,
+            self.0 % 1000000 / 100000,
+        )
+    }
+}
+
+impl Deref for DurationFmt {
+    type Target = u64;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 pub trait ErrWarn {
     fn warn(self);
 }

@@ -1,16 +1,20 @@
 use crate::arch::aarch64::mmio::get_uptime_us;
+use crate::println;
 use alloc::boxed::Box;
 use alloc::collections::VecDeque;
+use alloc::sync::Arc;
+use alloc::vec::Vec;
 use core::ptr::null;
+use core::sync::atomic::{AtomicU64, Ordering};
 use core::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 use core::{future::Future, pin::Pin};
-use spin::{Mutex, Once};
+use spin::{Mutex, Once, RwLock};
 
 pub(crate) static EXECUTOR: Once<SimpleExecutor> = Once::new();
 static PERF_INFO: Mutex<PerfInfo> = Mutex::new(PerfInfo::new());
+static PID_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 pub struct PerfInfo {
-    pub boot_time_us: u64,
     pub cpu_time_us: u64,
     pub total_yields: u64,
     pub tasks_spawned: u64,
@@ -31,7 +35,6 @@ pub struct PerfReport {
 impl PerfInfo {
     const fn new() -> Self {
         Self {
-            boot_time_us: 0,
             cpu_time_us: 0,
             total_yields: 0,
             tasks_spawned: 0,
@@ -43,7 +46,7 @@ impl PerfInfo {
         let avg_time_between_yields_us =
             self.cpu_time_us.checked_div(self.total_yields).unwrap_or(0);
         PerfReport {
-            uptime_us: get_uptime_us() - self.boot_time_us,
+            uptime_us: get_uptime_us(),
             cpu_time_us: self.cpu_time_us,
             total_yields: self.total_yields,
             avg_time_between_yields_us,
@@ -54,67 +57,130 @@ impl PerfInfo {
     }
 }
 
+pub struct TaskPerfInfo {
+    pub id: u64,
+    pub name: &'static [u8],
+    pub uptime_us: u64,
+    pub cpu_time_us: u64,
+    pub total_yields: u64,
+}
+
 pub struct Task {
-    future: Pin<Box<(dyn Future<Output = ()> + Send)>>,
+    id: u64,
+    name: &'static [u8],
+    start_time_us: u64,
+    cpu_time_us: u64,
+    total_yields: u64,
+    future: Mutex<Pin<Box<(dyn Future<Output = ()> + Send)>>>,
 }
 
 impl Task {
-    pub fn new(future: impl Future<Output = ()> + Send + 'static) -> Task {
+    pub fn new(name: &'static [u8], future: impl Future<Output = ()> + Send + 'static) -> Task {
         Task {
-            future: Box::pin(future),
+            id: PID_COUNTER.fetch_add(1, Ordering::SeqCst),
+            name,
+            start_time_us: get_uptime_us(),
+            cpu_time_us: 0,
+            total_yields: 0,
+            future: Mutex::new(Box::pin(future)),
         }
     }
 
-    pub fn new_raw(future: Pin<Box<(dyn Future<Output = ()> + Send)>>) -> Task {
-        Task { future }
+    pub fn new_raw(
+        name: &'static [u8],
+        future: Pin<Box<(dyn Future<Output = ()> + Send)>>,
+    ) -> Task {
+        Task {
+            id: PID_COUNTER.fetch_add(1, Ordering::SeqCst),
+            name,
+            start_time_us: get_uptime_us(),
+            cpu_time_us: 0,
+            total_yields: 0,
+            future: Mutex::new(future),
+        }
     }
 
-    fn poll(&mut self, context: &mut Context) -> Poll<()> {
-        self.future.as_mut().poll(context)
+    fn poll(&self, context: &mut Context) -> Poll<()> {
+        self.future.lock().as_mut().poll(context)
     }
 }
 
 pub struct SimpleExecutor {
-    task_queue: Mutex<VecDeque<Task>>,
+    tasks: Mutex<Vec<Arc<RwLock<Task>>>>,
+    run_queue: Mutex<VecDeque<u64>>,
 }
 
 impl SimpleExecutor {
     pub fn new() -> SimpleExecutor {
         SimpleExecutor {
-            task_queue: Mutex::new(VecDeque::new()),
+            tasks: Mutex::new(Vec::new()),
+            run_queue: Mutex::new(VecDeque::new()),
         }
     }
 
     pub fn spawn(&self, task: Task) {
-        self.task_queue.lock().push_back(task);
+        let id = task.id;
+        self.tasks.lock().push(Arc::new(RwLock::new(task)));
+        self.run_queue.lock().push_back(id);
         let mut perf_info = PERF_INFO.lock();
         perf_info.tasks_spawned += 1;
     }
 
     pub fn run(&self) {
         loop {
-            let next_task = self.task_queue.lock().pop_front();
-            if let Some(mut task) = next_task {
+            let next_task = self.run_queue.lock().pop_front();
+            if let Some(task_id) = next_task {
                 let waker = dummy_waker();
                 let mut context = Context::from_waker(&waker);
 
-                let uptime_before = get_uptime_us();
-                let poll_result = task.poll(&mut context);
-                let uptime_after = get_uptime_us();
+                let mut found_task = None;
+                if let Some(task) = self
+                    .tasks
+                    .lock()
+                    .iter_mut()
+                    .find(|t| t.read().id == task_id)
+                {
+                    found_task = Some(task.clone());
+                } else {
+                    println!("no task?");
+                }
 
-                let mut perf_info = PERF_INFO.lock();
-                match poll_result {
-                    Poll::Ready(()) => {
-                        // task done
-                        perf_info.tasks_killed += 1;
-                    }
-                    Poll::Pending => {
-                        self.task_queue.lock().push_back(task);
+                if let Some(found_task) = found_task {
+                    // Run the task
+                    let locked_found_task = found_task.read();
+                    let uptime_before = get_uptime_us();
+                    let poll_result = locked_found_task.poll(&mut context);
+                    let uptime_after = get_uptime_us();
+                    drop(locked_found_task);
+
+                    // Update counters
+                    let mut locked_found_task = found_task.write();
+                    locked_found_task.total_yields += 1;
+                    locked_found_task.cpu_time_us += uptime_after - uptime_before;
+                    let mut perf_info = PERF_INFO.lock();
+                    perf_info.total_yields += 1;
+                    perf_info.cpu_time_us += uptime_after - uptime_before;
+                    drop(locked_found_task);
+
+                    match poll_result {
+                        Poll::Ready(()) => {
+                            // task done
+                            perf_info.tasks_killed += 1;
+
+                            let mut tasks = self.tasks.lock();
+                            let idx = tasks
+                                .iter()
+                                .position(|t| t.read().id == task_id)
+                                .expect("Tried to kill non-existent process");
+                            tasks.remove(idx);
+                        }
+                        Poll::Pending => {
+                            self.run_queue.lock().push_back(task_id);
+                        }
                     }
                 }
-                perf_info.total_yields += 1;
-                perf_info.cpu_time_us += uptime_after - uptime_before;
             } else {
+                println!("bye");
                 break;
             }
         }
@@ -124,6 +190,24 @@ impl SimpleExecutor {
         let executor = SimpleExecutor::new();
         executor.spawn(task);
         executor.run();
+    }
+
+    pub fn proc_list(&self) -> Vec<TaskPerfInfo> {
+        let uptime = get_uptime_us();
+        self.tasks
+            .lock()
+            .iter()
+            .map(|t| {
+                let t = t.read();
+                TaskPerfInfo {
+                    id: t.id,
+                    name: t.name,
+                    uptime_us: uptime - t.start_time_us,
+                    cpu_time_us: t.cpu_time_us,
+                    total_yields: t.total_yields,
+                }
+            })
+            .collect()
     }
 }
 
@@ -167,12 +251,14 @@ impl Future for YieldNow {
 
 pub fn init() {
     EXECUTOR.call_once(SimpleExecutor::new);
-    let mut perf_info = PERF_INFO.lock();
-    perf_info.boot_time_us = get_uptime_us();
 }
 
 pub fn run() {
     EXECUTOR.wait().unwrap().run();
+}
+
+pub fn proc_list() -> Vec<TaskPerfInfo> {
+    EXECUTOR.wait().unwrap().proc_list()
 }
 
 pub fn perf_report() -> PerfReport {
@@ -181,9 +267,9 @@ pub fn perf_report() -> PerfReport {
 
 #[macro_export]
 macro_rules! spawn_task {
-    ($b:block) => {{
+    ($name: expr, $b:block) => {{
         let executor = crate::ktask::EXECUTOR.wait().unwrap();
         let closure = async move || ($b);
-        executor.spawn(crate::ktask::Task::new_raw(Box::pin(closure())));
+        executor.spawn(crate::ktask::Task::new_raw($name, Box::pin(closure())));
     }};
 }

@@ -98,7 +98,7 @@ pub fn set_font(font: &'static [u8]) {
 }
 
 pub fn init() {
-    spawn_task!({
+    spawn_task!(b"FBCON.input", {
         // Create the input queue
         let root = ipc::ROOT.read().as_ref().unwrap().clone();
         let _input_queue = root
@@ -126,7 +126,7 @@ pub fn init() {
         // }
     });
 
-    spawn_task!({
+    spawn_task!(b"FBCON.output", {
         // Create the output queue
         let root = ipc::ROOT.read().as_ref().unwrap().clone();
         let output_queue = root
@@ -256,7 +256,7 @@ pub fn init() {
     });
 
     // Drawing thread
-    spawn_task!({
+    spawn_task!(b"FBCON.main", {
         println!("[INFO] Framebuffer console initialising");
 
         // Draw loop

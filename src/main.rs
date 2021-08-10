@@ -137,7 +137,7 @@ unsafe extern "C" fn kmain_on_stack(dtb_addr: *const u8) -> ! {
     }
 
     // // IPC test
-    // // ktask::SimpleExecutor::run_blocking(ktask::Task::new_raw(Box::pin(ipc::test())));
+    // // ktask::SimpleExecutor::run_blocking(ktask::Task::new_raw(b"IPC Test", Box::pin(ipc::test())));
     //
     // println!("[DBUG] virt2phy tests:");
     // for addr in [
@@ -245,7 +245,7 @@ unsafe extern "C" fn kmain_on_stack(dtb_addr: *const u8) -> ! {
     // sdhc.read_block(0, &mut buf).unwrap();
     // assert_eq!(buf[0], 0xdeadbeef);
 
-    spawn_task!({
+    spawn_task!(b"KShell.launcher", {
         let root = ipc::ROOT.read().as_ref().unwrap().clone();
 
         async fn navigate(mut root: ipc::IpcRef, path: &[u64]) -> ipc::IpcRef {

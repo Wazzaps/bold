@@ -15,7 +15,7 @@ pub fn mux(input: IpcRef) -> (IpcRef, IpcRef) {
     };
     let copies = (out_queue_1.clone(), out_queue_2.clone());
 
-    spawn_task!({
+    spawn_task!(b"StreamMux", {
         let mut buf = [0u8; 1];
         loop {
             if let Some(1) = input.queue_read(&mut buf).await {
