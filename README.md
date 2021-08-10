@@ -1,5 +1,5 @@
 # BoldOS
-
+[![Nightly Rust CI Build](https://github.com/Wazzaps/bold/actions/workflows/rust-nightly-ci.yml/badge.svg)](https://github.com/Wazzaps/bold/actions/workflows/rust-nightly-ci.yml)
 [![GitHub Workflow Status](https://img.shields.io/github/workflow/status/Wazzaps/bold/Build%20BoldOS?style=flat-square)](https://github.com/Wazzaps/bold/actions)
 [![GitHub stars](https://img.shields.io/github/stars/Wazzaps/bold.svg?style=flat-square&label=github%20stars)](https://github.com/Wazzaps/bold)
 [![GitHub Contributors](https://img.shields.io/github/contributors/Wazzaps/bold.svg?style=flat-square)](https://github.com/Wazzaps/bold/graphs/contributors)
