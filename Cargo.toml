@@ -2,6 +2,7 @@
 name = "boldos"
 version = "0.1.0"
 edition = "2018"
+repository = "https://github.com/keruspe/tar.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -30,3 +31,4 @@ async-trait = "0.1.50"
 futures = { version = "0.3", default-features = false, features = ["alloc"] }
 arrayvec = { version = "0.7.1", default-features = false }
 dtb = "0.2.0"
+tar-parser = { path = "externals/tar-parser.rs" }
