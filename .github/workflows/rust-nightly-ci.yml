@@ -5,7 +5,7 @@ on:
     branches: [ master temp/hacky_code ]
   pull_request:
     branches: [ master ]
-  workflow_dispach:
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
