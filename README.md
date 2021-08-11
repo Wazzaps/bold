@@ -60,11 +60,11 @@ Mix of:
 
 - [x] Physical page allocator
 - [x] Fixed virtual area for kernel data
-- [ ] Cooperative multi-tasking for kernel tasks
+- [x] Cooperative multi-tasking for kernel tasks
     - [x] Naive executor
     - [x] Async-ify `FileInterface`
     - [x] Maybe Stream-ify `FileInterface`?
-    - [ ] Proper executor
+    - [x] Proper executor
 - [x] Read from SDHC card
 - [x] Print kernel argv
 - [x] Switch to EL1 from EL2
@@ -73,6 +73,9 @@ Mix of:
 - [ ] Dynamically sized virtual allocator for kernel data
     - [x] Dynamically map pages and allocate page tables
 - [x] Exception handling
+- [ ] Interrupts
+  - [ ] UART1 interrupts
+  - [ ] Timer interrupts
 - [ ] Make use of DTB
 - [ ] Parse tar initrd
 - [ ] Run code in EL0 (usermode)
