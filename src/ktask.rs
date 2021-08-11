@@ -203,6 +203,13 @@ impl SimpleExecutor {
             })
             .collect()
     }
+
+    pub fn wake(&self, pid: usize) {
+        let mut run_queue = self.run_queue.lock();
+        if !run_queue.contains(&pid) {
+            run_queue.push_back(pid);
+        }
+    }
 }
 
 fn run_queue_raw_waker(task_id: usize) -> RawWaker {
@@ -259,6 +266,10 @@ pub fn run() {
 
 pub fn proc_list() -> Vec<TaskPerfInfo> {
     EXECUTOR.wait().proc_list()
+}
+
+pub fn wake(pid: usize) {
+    EXECUTOR.wait().wake(pid)
 }
 
 pub fn perf_report() -> PerfReport {
