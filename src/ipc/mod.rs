@@ -1,4 +1,4 @@
-pub(crate) mod condvar;
+// pub(crate) mod condvar;
 pub(crate) mod dir;
 pub(crate) mod signal;
 pub(crate) mod spsc_mux;
