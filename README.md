@@ -14,7 +14,7 @@ Mix of:
 
 ## Screenshot
 
-![Screenshot](https://i.ibb.co/YQqhQHH/Screenshot-from-2021-07-18-01-43-15.png)
+![Screenshot](https://i.ibb.co/93HxpHW/Screenshot-from-2021-08-12-22-43-25.png)
 
 ## Development environment (linux) - with GUI
 
