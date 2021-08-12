@@ -82,6 +82,7 @@ struct ConsoleState {
     pub last_text_buf: [u8; 80 * 30],
     pub cursor: u32,
     pub font: &'static [u8],
+    pub last_font: &'static [u8],
 }
 
 static STATE: Mutex<ConsoleState> = Mutex::new(ConsoleState {
@@ -89,6 +90,7 @@ static STATE: Mutex<ConsoleState> = Mutex::new(ConsoleState {
     last_text_buf: [b' '; 80 * 30],
     cursor: 0,
     font: fonts::TERMINUS,
+    last_font: fonts::TERMINUS,
 });
 static IS_CHANGED: AtomicBool = AtomicBool::new(true);
 
@@ -276,6 +278,7 @@ pub fn init() {
 
                                 if state.text_buf[row * 80 + col]
                                     != state.last_text_buf[row * 80 + col]
+                                    || state.font.as_ptr() != state.last_font.as_ptr()
                                 {
                                     framebuffer
                                         .call(framebuffer::FramebufferCM::DrawChar {
@@ -292,6 +295,11 @@ pub fn init() {
                             }
                             yield_now().await;
                         }
+                    }
+
+                    let mut state = STATE.lock();
+                    if state.font.as_ptr() != state.last_font.as_ptr() {
+                        state.last_font = state.font;
                     }
                 }
                 did_change
