@@ -444,7 +444,7 @@ impl KShell {
     async fn handle_cmd_ps(&mut self, _words: &[&[u8]]) {
         queue_writeln!(
             self.output.clone(),
-            "     PID  Uptime CPUTime   Yields Name"
+            "     PID   Uptime  CPUTime   Yields Name"
         );
         for task in ktask::proc_list() {
             queue_writeln!(
