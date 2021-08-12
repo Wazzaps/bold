@@ -66,6 +66,7 @@ where
     F: FnMut() -> Fut,
     Fut: core::future::Future<Output = bool>,
 {
+    RENDER_WAKER.wait().await;
     let start = get_uptime_us();
     let did_render = (f)().await;
     let end = get_uptime_us();
@@ -144,7 +145,7 @@ pub fn init() {
         // }
     });
 
-    spawn_task!(b"FBCON.output", {
+    spawn_task!(b"FBCON.ttyemu", {
         // Create the output queue
         let root = ipc::ROOT.read().as_ref().unwrap().clone();
         let output_queue = root
@@ -275,7 +276,7 @@ pub fn init() {
     });
 
     // Drawing thread
-    spawn_task!(b"FBCON.main", {
+    spawn_task!(b"FBCON.render", {
         println!("[INFO] Framebuffer console initialising");
 
         // Draw loop
@@ -285,7 +286,6 @@ pub fn init() {
             .unwrap();
         loop {
             vsync(async || {
-                RENDER_WAKER.wait().await;
                 for col in 0..80 {
                     for row in 0..30 {
                         {
