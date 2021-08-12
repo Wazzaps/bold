@@ -17,8 +17,16 @@ if __name__ == '__main__':
         for col in range(16):
             for y in range(16):
                 for x in range(8):
-                    data += list(pixels[col*9 + x, row*17 + y])
-                    data.append(0)  # Alpha
+                    data.append(pixels[col*9 + x, row*17 + y][0])
 
-    open(f'src/fonts/{font_name}.binfont', 'wb').write(bytearray(data))
+    bitpack = []
+    bit = 0
+    for pixel in data:
+        if bit == 0:
+            bitpack.append(0)
+        if pixel:
+            bitpack[-1] |= 1 << bit
+        bit = (bit + 1) % 8
+
+    open(f'src/fonts/{font_name}.binfont', 'wb').write(bytearray(bitpack))
 

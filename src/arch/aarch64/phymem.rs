@@ -110,12 +110,20 @@ impl FreeList {
     }
 
     pub unsafe fn init(&mut self) {
+        // FIXME: For framebuffer, etc
+        const END_RESERVE: usize = 0xf000000;
+        const END_RESERVE_PAGES: usize = END_RESERVE / PAGE_SIZE;
+
         let ram_start = &__ram_start as *const u8 as usize;
         let ram_end = &__ram_end as *const u8 as usize;
         let ram_start_pages = (&__ram_start as *const u8 as usize) / PAGE_SIZE;
         let ram_end_pages = (&__ram_end as *const u8 as usize) / PAGE_SIZE;
-        println!("[DBUG] Phymem range: 0p{:x}..0p{:x}", ram_start, ram_end);
-        self.free_count = (ram_end_pages - ram_start_pages) as u32;
+        println!(
+            "[DBUG] Phymem range: 0p{:x}..0p{:x}",
+            ram_start,
+            ram_end - END_RESERVE
+        );
+        self.free_count = ((ram_end_pages - END_RESERVE_PAGES) - ram_start_pages) as u32;
         self.data[0] = FreeRange {
             base: ram_start_pages as u32,
             len: self.free_count,

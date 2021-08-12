@@ -186,6 +186,10 @@ impl KShell {
                     queue_write!(self.output.clone(), "\n");
                     return buf;
                 }
+                // Ctrl+B (crash)
+                b'\x02' => {
+                    panic!("Requested panic with Ctrl+B");
+                }
                 // Unknown
                 _ => {
                     queue_write!(self.output.clone(), "<{:02x}>", c);
@@ -384,11 +388,11 @@ impl KShell {
 
         let font;
         font = match words[1] {
-            b"vga" => fonts::VGA,
-            b"terminus" => fonts::TERMINUS,
-            b"thin" => fonts::ISO,
-            b"round" => fonts::ISO88591,
-            b"tremolo" => fonts::TREMOLO,
+            b"vga" => fonts::VGA.get(),
+            b"terminus" => fonts::TERMINUS.get(),
+            b"thin" => fonts::ISO.get(),
+            b"round" => fonts::ISO88591.get(),
+            b"tremolo" => fonts::TREMOLO.get(),
             _ => {
                 queue_writeln!(self.output.clone(), "Unknown font");
                 return;
@@ -445,7 +449,7 @@ impl KShell {
         for task in ktask::proc_list() {
             queue_writeln!(
                 self.output.clone(),
-                "{: >8} {: >7} {: >7} {: >8} {}",
+                "{: >8} {: >8} {: >8} {: >8} {}",
                 task.id,
                 DurationFmt(task.uptime_us),
                 DurationFmt(task.cpu_time_us),

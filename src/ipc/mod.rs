@@ -1,4 +1,6 @@
+pub(crate) mod condvar;
 pub(crate) mod dir;
+pub(crate) mod signal;
 pub(crate) mod spsc_mux;
 pub(crate) mod spsc_queue;
 pub(crate) mod well_known;

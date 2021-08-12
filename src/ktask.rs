@@ -1,5 +1,5 @@
 use crate::arch::aarch64::mmio::get_uptime_us;
-use crate::println;
+use crate::{println, AsciiStr};
 use alloc::boxed::Box;
 use alloc::collections::VecDeque;
 use alloc::sync::Arc;
@@ -172,6 +172,10 @@ impl SimpleExecutor {
                                 .iter()
                                 .position(|t| t.read().id == task_id)
                                 .expect("Tried to kill non-existent process");
+                            println!(
+                                "[DBUG] Killing task \"{}\"",
+                                AsciiStr(tasks[idx].read().name)
+                            );
                             tasks.remove(idx);
                         }
                         Poll::Pending => {

@@ -1,7 +1,6 @@
 use crate::{println, AsciiStr};
 use alloc::vec::Vec;
 use arrayvec::ArrayVec;
-use dtb;
 use dtb::StructItem;
 
 fn dtb_tree(reader: &dtb::Reader) {

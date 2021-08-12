@@ -1,5 +1,6 @@
 use crate::ipc::{IpcRef, IpcSpscQueue};
 use crate::ktask;
+use crate::print;
 use crate::spawn_task;
 use alloc::boxed::Box;
 
@@ -37,10 +38,18 @@ pub fn mux_with(input: IpcRef, out_queue_1: IpcRef, out_queue_2: IpcRef) {
         let mut buf = [0u8; 256];
         loop {
             if let Some(data_len) = input.queue_read(&mut buf).await {
-                out_queue_1.queue_write_all(&buf[..data_len]).await.unwrap();
-                out_queue_2.queue_write_all(&buf[..data_len]).await.unwrap();
+                let mut pos_1 = 0;
+                let mut pos_2 = 0;
+                while pos_1 != data_len || pos_2 != data_len {
+                    if pos_1 != data_len {
+                        pos_1 += out_queue_1.queue_write(&buf[pos_1..data_len]).unwrap();
+                    }
+                    if pos_2 != data_len {
+                        pos_2 += out_queue_2.queue_write(&buf[pos_2..data_len]).unwrap();
+                    }
+                    ktask::yield_now().await;
+                }
             }
-            ktask::yield_now().await;
         }
     });
 }

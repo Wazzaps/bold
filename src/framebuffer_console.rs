@@ -10,6 +10,8 @@ use crate::spawn_task;
 use crate::utils::ErrWarn;
 use alloc::boxed::Box;
 use core::sync::atomic::{AtomicBool, Ordering};
+use ipc::signal::Signal;
+use lazy_static::lazy_static;
 use spin::Mutex;
 
 pub struct PerfInfo {
@@ -85,18 +87,32 @@ struct ConsoleState {
     pub last_font: &'static [u8],
 }
 
-static STATE: Mutex<ConsoleState> = Mutex::new(ConsoleState {
-    text_buf: [b' '; 80 * 30],
-    last_text_buf: [b' '; 80 * 30],
-    cursor: 0,
-    font: fonts::TERMINUS,
-    last_font: fonts::TERMINUS,
-});
-static IS_CHANGED: AtomicBool = AtomicBool::new(true);
+lazy_static! {
+    static ref STATE: Mutex<ConsoleState> = Mutex::new(ConsoleState {
+        text_buf: [b' '; 80 * 30],
+        last_text_buf: [b' '; 80 * 30],
+        cursor: 0,
+        font: fonts::TERMINUS.get(),
+        last_font: fonts::TERMINUS.get(),
+    });
+    static ref RENDER_WAKER: Signal = Signal::new();
+}
 
 pub fn set_font(font: &'static [u8]) {
     STATE.lock().font = font;
-    IS_CHANGED.store(true, Ordering::SeqCst);
+    RENDER_WAKER.notify_all();
+}
+
+fn scroll_buffer(state: &mut ConsoleState) {
+    for line in 0..29 {
+        let (top, bottom) = state.text_buf.split_at_mut((line + 1) * 80);
+        (&mut top[line * 80..(line + 1) * 80]).copy_from_slice(&bottom[0..80])
+    }
+    state.cursor = (state.text_buf.len() - 80) as u32;
+
+    let last_line_end = state.text_buf.len();
+    let last_line_start = last_line_end - 80;
+    (&mut state.text_buf[last_line_start..last_line_end]).fill(b' ');
 }
 
 pub fn init() {
@@ -172,29 +188,20 @@ pub fn init() {
         let mut buf = [0u8; 1];
         loop {
             if let Some(1) = output_queue.queue_read(&mut buf).await {
-                let mut state = STATE.lock();
-                let cursor = state.cursor;
                 match buf[0] {
                     // Newline
                     b'\n' => {
-                        if cursor as usize > (state.text_buf.len() - 80) {
-                            for line in 0..29 {
-                                let (top, bottom) = state.text_buf.split_at_mut((line + 1) * 80);
-                                (&mut top[line * 80..(line + 1) * 80])
-                                    .copy_from_slice(&bottom[0..80])
-                            }
-                            state.cursor = (state.text_buf.len() - 80) as u32;
-
-                            let last_line_end = state.text_buf.len();
-                            let last_line_start = last_line_end - 80;
-                            (&mut state.text_buf[last_line_start..last_line_end]).fill(b' ');
+                        let mut state = STATE.lock();
+                        if state.cursor as usize > (state.text_buf.len() - 80) {
+                            scroll_buffer(&mut *state);
                         } else {
-                            state.cursor = (cursor / 80 * 80) + 80;
+                            state.cursor = (state.cursor / 80 * 80) + 80;
                         }
                     }
                     // Backspace
                     0x7f | 0x08 => {
-                        state.cursor = (cursor / 80 * 80).max(cursor - 1);
+                        let mut state = STATE.lock();
+                        state.cursor = (state.cursor / 80 * 80).max(state.cursor - 1);
                     }
                     // Bell (ignored)
                     0x07 => {}
@@ -206,23 +213,26 @@ pub fn init() {
                             match buf[0] {
                                 b'[' => {
                                     if let Some(1) = output_queue.queue_read(&mut buf).await {
+                                        let mut state = STATE.lock();
                                         // print_unk(buf[0], &mut state);
                                         match buf[0] {
                                             // Clear rest of line
                                             b'K' => {
-                                                for clear_cursor in cursor..(cursor / 80 * 80) + 80
+                                                for clear_cursor in
+                                                    state.cursor..(state.cursor / 80 * 80) + 80
                                                 {
                                                     state.text_buf[clear_cursor as usize] = b' ';
                                                 }
                                             }
                                             // Left
                                             b'D' => {
-                                                state.cursor = (cursor / 80 * 80).max(cursor - 1);
+                                                state.cursor =
+                                                    (state.cursor / 80 * 80).max(state.cursor - 1);
                                             }
                                             // Right
                                             b'C' => {
-                                                state.cursor =
-                                                    ((cursor / 80 * 80) + 80).min(cursor + 1);
+                                                state.cursor = ((state.cursor / 80 * 80) + 80)
+                                                    .min(state.cursor + 1);
                                             }
                                             _ => {
                                                 print_unk(buf[0], &mut state);
@@ -231,6 +241,7 @@ pub fn init() {
                                     }
                                 }
                                 _ => {
+                                    let mut state = STATE.lock();
                                     print_unk(buf[0], &mut state);
                                 }
                             }
@@ -238,22 +249,28 @@ pub fn init() {
                     }
                     // Normal letters
                     b' '..=b'~' => {
-                        state.text_buf[cursor as usize] = buf[0];
+                        let mut state = STATE.lock();
+                        let cursor = state.cursor as usize;
+                        state.text_buf[cursor] = buf[0];
                         state.cursor += 1;
                     }
                     // Unknown
                     _ => {
+                        let mut state = STATE.lock();
                         print_unk(buf[0], &mut state);
                     }
                 }
 
-                if (state.cursor as usize) >= state.text_buf.len() {
-                    state.cursor = state.text_buf.len() as u32 - 1;
+                {
+                    let mut state = STATE.lock();
+                    if (state.cursor as usize) >= state.text_buf.len() {
+                        // state.cursor = state.text_buf.len() as u32 - 1;
+                        scroll_buffer(&mut *state);
+                    }
                 }
 
-                IS_CHANGED.store(true, Ordering::SeqCst);
+                RENDER_WAKER.notify_all();
             }
-            yield_now().await;
         }
     });
 
@@ -268,41 +285,39 @@ pub fn init() {
             .unwrap();
         loop {
             vsync(async || {
-                let did_change = IS_CHANGED.swap(false, Ordering::SeqCst);
-                if did_change {
-                    for col in 0..80 {
-                        for row in 0..30 {
+                RENDER_WAKER.wait().await;
+                for col in 0..80 {
+                    for row in 0..30 {
+                        {
+                            let mut state = STATE.try_lock().unwrap();
+                            let font = state.font;
+
+                            if state.text_buf[row * 80 + col] != state.last_text_buf[row * 80 + col]
+                                || state.font.as_ptr() != state.last_font.as_ptr()
                             {
-                                let mut state = STATE.lock();
-                                let font = state.font;
-
-                                if state.text_buf[row * 80 + col]
-                                    != state.last_text_buf[row * 80 + col]
-                                    || state.font.as_ptr() != state.last_font.as_ptr()
-                                {
-                                    framebuffer
-                                        .call(framebuffer::FramebufferCM::DrawChar {
-                                            font,
-                                            char: state.text_buf[row * 80 + col],
-                                            row,
-                                            col,
-                                        })
-                                        .await
-                                        .warn();
-                                    state.last_text_buf[row * 80 + col] =
-                                        state.text_buf[row * 80 + col];
-                                }
+                                framebuffer
+                                    .call(framebuffer::FramebufferCM::DrawChar {
+                                        font,
+                                        char: state.text_buf[row * 80 + col],
+                                        row,
+                                        col,
+                                    })
+                                    .await
+                                    .warn();
+                                state.last_text_buf[row * 80 + col] =
+                                    state.text_buf[row * 80 + col];
                             }
-                            yield_now().await;
                         }
-                    }
-
-                    let mut state = STATE.lock();
-                    if state.font.as_ptr() != state.last_font.as_ptr() {
-                        state.last_font = state.font;
+                        yield_now().await;
                     }
                 }
-                did_change
+
+                let mut state = STATE.try_lock().unwrap();
+                if state.font.as_ptr() != state.last_font.as_ptr() {
+                    state.last_font = state.font;
+                }
+
+                true
             })
             .await;
         }

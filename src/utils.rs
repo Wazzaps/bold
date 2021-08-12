@@ -49,10 +49,10 @@ impl Display for DurationFmt {
     fn fmt(&self, fmt: &mut Formatter<'_>) -> fmt::Result {
         write!(
             fmt,
-            "{:02}:{:02}.{:01}",
+            "{:02}:{:02}.{:02}",
             self.0 / 60000000,
             self.0 % 60000000 / 1000000,
-            self.0 % 1000000 / 100000,
+            self.0 % 1000000 / 10000,
         )
     }
 }
