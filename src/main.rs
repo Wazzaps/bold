@@ -300,10 +300,11 @@ unsafe extern "C" fn kmain_on_stack(dtb_addr: *const u8) -> ! {
         )
         .await;
 
-        let (input1, input2) = ipc::spsc_mux::mux(uart_shell_in);
-
-        kshell::launch(input1, fb_shell_out, false);
-        kshell::launch(input2, uart_shell_out, true);
+        kshell::launch(
+            uart_shell_in,
+            ipc::spsc_mux::mux_into_outputs(uart_shell_out, fb_shell_out),
+            false,
+        );
     });
 
     ktask::run();
