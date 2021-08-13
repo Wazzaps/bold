@@ -15,9 +15,6 @@ jobs:
       volumes:
         - ${{github.workspace}}:/wd
       options: -w /wd
-    defaults:
-      run:
-        shell: bash
     steps:
       - name: Check out repository code
         uses: actions/checkout@v1
@@ -30,6 +27,11 @@ jobs:
           path: |
             /root/.cargo/registry
             /wd/target
+      - name: waht is in the cargo env
+        run: |
+          echo $HOME
+          cat /root/.cargo/env
+          cat $HOME/.cargo/env
       - name: Build
         run: cargo build --release
       - name: Clippy
