@@ -30,7 +30,8 @@ jobs:
       uses: actions-rs/toolchain@v1
       with:
           toolchain: nightly
-          target: aarch64-unkown-linux-gnu
+          target: aarch64-unknown-linux-gnu
+          profile: minimal
           override: true
           components: rustfmt, clippy, rust-src
     - name: Build
