@@ -15,9 +15,12 @@ jobs:
       volumes:
         - ${{github.workspace}}:/wd
       options: -w /wd
+    defaults:
+      run:
+        shell: bash
     steps:
       - name: Check out repository code
-        uses: actions/checkout@main
+        uses: actions/checkout@v2.3.4
         with:
           submodules: recursive
       - name: Cache Cargo packages
