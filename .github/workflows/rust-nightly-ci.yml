@@ -17,14 +17,28 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+    - uses: actions/cache@v2
+      with:
+        path: |
+          ~/.cargo/bin/
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+          target/
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
     - name: Install latest nightly
       uses: actions-rs/toolchain@v1
       with:
           toolchain: nightly
+          target: aarch64-unkown-linux-gnu
           override: true
           components: rustfmt, clippy, rust-src
     - name: Build
-      run: cargo build --release --verbose
+      uses: actions-rs/cargo@v1
+      with:
+        use-cross: true
+        command: build
+        args: --release --verbose
     - name: Clippy
       run: cargo clippy --release
 #     - name: Run tests
