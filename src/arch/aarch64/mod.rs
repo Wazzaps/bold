@@ -11,6 +11,7 @@ pub(crate) mod phymem;
 pub(crate) mod sdhc;
 // pub(crate) mod uart;
 pub(crate) mod dtb;
+pub(crate) mod interrupts;
 pub(crate) mod uart1;
 pub(crate) mod virtmem;
 
@@ -20,6 +21,17 @@ macro_rules! set_msr {
         asm!(
             concat!("msr ", stringify!($name), ", {:x}"),
             in(reg) $value,
+            options(nomem, nostack)
+        );
+    };
+}
+
+#[macro_export]
+macro_rules! set_msr_const {
+    ($name: ident, $value: expr) => {
+        asm!(
+            concat!("msr ", stringify!($name), ", {}"),
+            const $value,
             options(nomem, nostack)
         );
     };

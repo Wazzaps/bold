@@ -125,16 +125,18 @@ unsafe extern "C" fn kmain_on_stack(dtb_addr: *const u8) -> ! {
     driver_manager::init_driver_by_name(b"Raspberry Pi 3 UART1").warn();
     println!("--- Bold Kernel v{} ---", env!("CARGO_PKG_VERSION"));
 
+    arch::aarch64::interrupts::init();
+
     // Should be skipped by exception handler
-    *(0x99999999 as *mut u8) = 0xaa;
+    // *(0x99999999 as *mut u8) = 0xaa;
 
     // Test timer (interrupts not working yet)
-    set_msr!(CNTP_TVAL_EL0, 10000);
-    set_msr!(CNTP_CTL_EL0, 3);
-    for _ in 0..10 {
-        println!("{} {:x}", get_msr!(CNTP_CTL_EL0), get_msr!(CNTP_TVAL_EL0));
-        delay_us_sync(1);
-    }
+    // set_msr!(CNTP_TVAL_EL0, 10000);
+    // set_msr!(CNTP_CTL_EL0, 3);
+    // for _ in 0..10 {
+    //     println!("{} {:x}", get_msr!(CNTP_CTL_EL0), get_msr!(CNTP_TVAL_EL0));
+    //     delay_us_sync(1);
+    // }
 
     // // IPC test
     // // ktask::SimpleExecutor::run_blocking(ktask::Task::new_raw(b"IPC Test", Box::pin(ipc::test())));

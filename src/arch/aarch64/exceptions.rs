@@ -50,3 +50,8 @@ pub unsafe fn exception_handler2(e: &mut ExceptionContext) {
         }
     }
 }
+
+#[no_mangle]
+pub unsafe fn irq_handler(_e: &mut ExceptionContext) {
+    crate::arch::aarch64::interrupts::handle_irq();
+}
