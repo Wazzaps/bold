@@ -18,6 +18,8 @@ jobs:
         - /tmp/build-cache:/wd/target
       options: -w /wd
     steps:
+      - name: debug checkout error
+        run: echo $(pwd)
       - name: Check out repository code
         uses: actions/checkout@v2
         with:
