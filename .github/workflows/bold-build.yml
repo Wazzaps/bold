@@ -20,7 +20,7 @@ jobs:
         shell: bash
     steps:
       - name: Check out repository code
-        uses: actions/checkout@v2.3.4
+        uses: actions/checkout@v1
         with:
           submodules: recursive
       - name: Cache Cargo packages
