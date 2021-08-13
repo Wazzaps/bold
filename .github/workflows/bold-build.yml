@@ -13,9 +13,8 @@ jobs:
     container:
       image: wazzaps/boldos-build
       volumes:
-        - /tmp/cargo-registry-cache:/root/.cargo/registry
-        - /tmp/build-cache:/__w/bold/bold/target
-      options: --privileged
+        - ${{github.workspace}}:/wd
+      options: -w /wd
     steps:
       - name: Check out repository code
         uses: actions/checkout@v2
@@ -26,8 +25,8 @@ jobs:
         with:
           key: boldos-caches-2
           path: |
-            /tmp/cargo-registry-cache
-            /tmp/build-cache
+            /root/.cargo/registry
+            /wd/target
       - name: Build
         run: cargo build --release
       - name: Clippy
