@@ -10,6 +10,13 @@ on:
 jobs:
   Build:
     runs-on: ubuntu-latest
+    container:
+      image: wazzaps/boldos-build
+      volumes:
+        - ${{github.workspace}}:/wd
+        - /tmp/cargo-registry-cache:/root/.cargo/registry
+        - /tmp/build-cache:/wd/target
+      options: -w /wd
     steps:
       - name: Check out repository code
         uses: actions/checkout@v2
@@ -23,12 +30,12 @@ jobs:
             /tmp/cargo-registry-cache
             /tmp/build-cache
       - name: Build
-        run: docker run --rm -w /wd -v ${{github.workspace}}:/wd -v /tmp/cargo-registry-cache:/root/.cargo/registry -v /tmp/build-cache:/wd/target wazzaps/boldos-build 'bash' '-c' '. $HOME/.cargo/env && cargo build --release'
+        run: cargo build --release
       - name: Clippy
-        run: docker run --rm -w /wd -v ${{github.workspace}}:/wd -v /tmp/cargo-registry-cache:/root/.cargo/registry -v /tmp/build-cache:/wd/target wazzaps/boldos-build 'bash' '-c' '. $HOME/.cargo/env && cargo clippy --release'
+        run: cargo clippy --release
 #        continue-on-error: true
       - name: Build Kernel Accessories
-        run: docker run --rm -w /wd -v ${{github.workspace}}:/wd -v /tmp/cargo-registry-cache:/root/.cargo/registry -v /tmp/build-cache:/wd/target wazzaps/boldos-build 'bash' '-c' '. $HOME/.cargo/env && ./scripts/prepare_kernel_accessories.sh target/aarch64-none-elf/release/boldos'
+        run: ./scripts/prepare_kernel_accessories.sh target/aarch64-none-elf/release/boldos
       - name: Fix cache permissions
         run: sudo chmod -R a+rwx /tmp/cargo-registry-cache /tmp/build-cache
       - name: Upload artifacts
