@@ -19,7 +19,7 @@ jobs:
       options: -w /wd
     steps:
       - name: debug checkout error
-        run: echo $(pwd)
+        run: echo $(pwd) ${{github.workspace}} $(ls -l /)
       - name: Check out repository code
         uses: actions/checkout@v2
         with:
