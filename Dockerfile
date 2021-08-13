@@ -8,3 +8,4 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && \
     cargo install xargo && \
     rustup override set nightly && \
     rustup component add rust-src
+RUN echo 'source $HOME/.cargo/env' >> $HOME/.bashrc
