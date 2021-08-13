@@ -13,13 +13,10 @@ jobs:
     container:
       image: wazzaps/boldos-build
       volumes:
-        - ${{github.workspace}}:/wd
         - /tmp/cargo-registry-cache:/root/.cargo/registry
-        - /tmp/build-cache:/wd/target
-      options: -w /wd
+        - /tmp/build-cache:/__w/bold/bold/target
+      options: --privileged
     steps:
-      - name: debug checkout error
-        run: echo $(pwd) ${{github.workspace}} $(ls -l /)
       - name: Check out repository code
         uses: actions/checkout@v2
         with:
