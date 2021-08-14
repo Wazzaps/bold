@@ -12,12 +12,12 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: wazzaps/boldos-build
+      volumes:
+        - ${{github.workspace}}:/wd
       env:
         HOME: /root
-        ENV: /etc/.profile
         RUSTUP_HOME: /root/.rustup
         CARGO_HOME: /root/.cargo
-      options: -e HOME="/root"
     steps:
       - name: Check out repository code
         uses: actions/checkout@v1
@@ -30,14 +30,6 @@ jobs:
           path: |
             /root/.cargo/registry
             /wd/target
-      - name: what is in the cargo env
-        run: |
-          cat /etc/.profile || echo no etc profile
-          which sh
-          ls -l /bin/sh
-          echo HOME="/root" >> /etc/.profile
-          cat /etc/.profile
-          rustup show
       - name: Build
         run: cargo build --release
       - name: Clippy
@@ -45,15 +37,13 @@ jobs:
 #        continue-on-error: true
       - name: Build Kernel Accessories
         run: ./scripts/prepare_kernel_accessories.sh target/aarch64-none-elf/release/boldos
-      - name: Fix cache permissions
-        run: sudo chmod -R a+rwx /tmp/cargo-registry-cache /tmp/build-cache
       - name: Upload artifacts
         uses: actions/upload-artifact@v2
         with:
           name: build-aarch64
           path: |
-            /tmp/build-cache/aarch64-none-elf/release/boldos
-            /tmp/build-cache/aarch64-none-elf/release/boldos.bin
-            /tmp/build-cache/aarch64-none-elf/release/initrd.tar
-            /tmp/build-cache/aarch64-none-elf/release/disk.img
+            /wd/target/aarch64-none-elf/release/boldos
+            /wd/target/aarch64-none-elf/release/boldos.bin
+            /wd/target/aarch64-none-elf/release/initrd.tar
+            /wd/target/aarch64-none-elf/release/disk.img
           if-no-files-found: error
