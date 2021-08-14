@@ -13,7 +13,7 @@ jobs:
       - name: Pull Request Labeler
         uses: actions/labeler@v3
         with:
-          repo-token: ${{ github.token }}
+          repo-token: "${{ secrets.GITHUB_TOKEN }}"
           sync_lables: true
       - name: Label the PR size
         uses: codelytv/pr-size-labeler@v1.6.0
