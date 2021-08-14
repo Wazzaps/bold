@@ -37,16 +37,11 @@ jobs:
       uses: actions-rs/toolchain@v1
       with:
           toolchain: nightly
-          target: aarch64-unknown-linux-gnu
           profile: minimal
           override: true
           components: rustfmt, clippy, rust-src
     - name: Build
-      uses: actions-rs/cargo@v1
-      with:
-        use-cross: true
-        command: build
-        args: --release --verbose
+      run: cargo build --release --verbose
     - name: Clippy
       run: cargo clippy --release
 #     - name: Run tests
