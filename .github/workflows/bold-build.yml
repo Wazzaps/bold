@@ -30,8 +30,8 @@ jobs:
       - name: waht is in the cargo env
         run: |
           echo $HOME
-          cat /root/.cargo/env
-          cat $HOME/.cargo/env
+          env
+          rustup show
       - name: Build
         run: cargo build --release
       - name: Clippy
