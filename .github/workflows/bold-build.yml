@@ -14,6 +14,8 @@ jobs:
       image: wazzaps/boldos-build
       volumes:
         - ${{github.workspace}}:/wd
+      env:
+        HOME: /root
       options: -w /wd
     steps:
       - name: Check out repository code
