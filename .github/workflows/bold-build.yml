@@ -29,13 +29,13 @@ jobs:
           path: |
             /root/.cargo/registry
             /wd/target
-      - name: waht is in the cargo env
+      - name: what is in the cargo env
         run: |
-          ls -ld $HOME
+          ls -l /github
           ls -la $HOME
-          rm -rf /gitHub/home
-          ln -s /root $HOME
-          ls -ld $HOME
+          rm -rf /github/home
+          ln -s /root /github/home
+          ls -l /github
           ls -la $HOME
           rustup show
       - name: Build
