@@ -1,0 +1,31 @@
+# https://github.com/marketplace/actions/labeler
+
+# Add 'documentation' label for changes to documentation
+documentation:
+  - "**/*.{html,md,txt}"
+  - "doc/**"
+
+# Add 'assets' label for changes to assets
+assets:
+  - "res/**"
+
+# Add 'externals' label for changes to external crates
+externals:
+  - "externals/**"
+
+# Add 'workflows' label for changes to the github workflows
+workflows:
+  - ".github/workflows/*"
+
+# Add 'targets' label for changes to the targets
+targets:
+  - "targets/**"
+
+# Add 'scripts' label for changes to the scripts
+scripts:
+  - "scripts/**"
+
+# https://github.com/marketplace/actions/regex-issue-labeler
+# Add/remove 'critical' label if issue contains the words 'urgent' or 'critical'
+critical:
+  - "(critical|urgent)"

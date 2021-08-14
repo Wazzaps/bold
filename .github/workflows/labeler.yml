@@ -3,14 +3,15 @@ on:
   pull_request_target:
 
 jobs:
-  labeler:
+  triage:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/labeler@v3
-        with:
-          repo-token: "${{ secrets.GITHUB_TOKEN }}"
+      - name: Pull Request Labeler
+        uses: actions/labeler@v3
+      - name: RegEx Issue Labeler
+        uses: github/issue-labeler@v2.4
       - name: Label the PR size
-        uses: codelytv/pr-size-labeler@v1
+        uses: codelytv/pr-size-labeler@v1.6.0
         with:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           xs_max_size: "10"
