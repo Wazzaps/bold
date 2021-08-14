@@ -1,6 +1,6 @@
 name: "Pull Request Labeler"
 on:
-  pull_request:
+  pull_request: # TODO: change this to pull_request_target when permissions change is in master
 
 permissions:
   contents: read
