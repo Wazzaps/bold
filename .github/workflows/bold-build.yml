@@ -12,11 +12,12 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: wazzaps/boldos-build
-      volumes:
-        - ${{github.workspace}}:/wd
       env:
         HOME: /root
-      options: -w /wd
+        ENV: /etc/.profile
+        RUSTUP_HOME: /root/.rustup
+        CARGO_HOME: /root/.cargo
+      options: -e HOME="/root"
     steps:
       - name: Check out repository code
         uses: actions/checkout@v1
@@ -31,12 +32,11 @@ jobs:
             /wd/target
       - name: what is in the cargo env
         run: |
-          ls -l /github
-          ls -la $HOME
-          rm -rf /github/home
-          ln -s /root /github/home
-          ls -l /github
-          ls -la $HOME
+          cat /etc/.profile || echo no etc profile
+          which sh
+          ls -l /bin/sh
+          echo HOME="/root" >> /etc/.profile
+          cat /etc/.profile
           rustup show
       - name: Build
         run: cargo build --release
