@@ -1,8 +1,12 @@
 # BoldOS
+[![GitHub issues](https://img.shields.io/github/issues/Wazzaps/bold)](https://github.com/Wazzaps/bold/issues)
+[![GitHub forks](https://img.shields.io/github/forks/Wazzaps/bold)](https://github.com/Wazzaps/bold/network)
+[![GitHub stars](https://img.shields.io/github/stars/Wazzaps/bold)](https://github.com/Wazzaps/bold/stargazers)
+[![GitHub license](https://badgen.net/github/license/Wazzaps/bold)](https://github.com/Wazzaps/bold/blob/master/LICENSE)
+[![GitHub Contributors](https://img.shields.io/github/contributors/Wazzaps/bold.svg?style=flat)](https://github.com/Wazzaps/bold/graphs/contributors)
+
 [![Nightly Rust CI Build](https://github.com/Wazzaps/bold/actions/workflows/rust-nightly-ci.yml/badge.svg)](https://github.com/Wazzaps/bold/actions/workflows/rust-nightly-ci.yml)
-[![GitHub Workflow Status](https://img.shields.io/github/workflow/status/Wazzaps/bold/Build%20BoldOS?style=flat-square)](https://github.com/Wazzaps/bold/actions)
-[![GitHub stars](https://img.shields.io/github/stars/Wazzaps/bold.svg?style=flat-square&label=github%20stars)](https://github.com/Wazzaps/bold)
-[![GitHub Contributors](https://img.shields.io/github/contributors/Wazzaps/bold.svg?style=flat-square)](https://github.com/Wazzaps/bold/graphs/contributors)
+[![Build BoldOS](https://github.com/Wazzaps/bold/actions/workflows/bold-build.yml/badge.svg)](https://github.com/Wazzaps/bold/actions/workflows/build-bold.yml)
 
 Tested on Raspberry pi 3 on QEMU
 
