@@ -2,9 +2,15 @@ name: "Build BoldOS"
 
 on:
   push:
-    branches: [master]
+    branches: [master develop]
+    paths:
+      - ".github/workflows/bold-build.yaml"
+      - "src/*"
+      - "scripts/prepare_kernel_accessories.sh"
+      - "Cargo.{toml,lock}"
+      - "targets/*"
   pull_request:
-    branches: [master]
+    branches: [master develop]
   workflow_dispatch:
 
 jobs:
