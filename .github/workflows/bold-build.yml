@@ -31,9 +31,12 @@ jobs:
             /wd/target
       - name: waht is in the cargo env
         run: |
-          ls -l $HOME
-          mkdir -p /github
+          ls -ld $HOME
+          ls -la $HOME
+          rm -rf /gitHub/home
           ln -s /root $HOME
+          ls -ld $HOME
+          ls -la $HOME
           rustup show
       - name: Build
         run: cargo build --release
