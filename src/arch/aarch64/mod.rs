@@ -1,7 +1,7 @@
 pub(crate) mod entropy;
 pub(crate) mod exceptions;
 pub(crate) mod framebuffer;
-mod init;
+pub(crate) mod init;
 pub(crate) mod mailbox;
 pub(crate) mod mailbox_methods;
 pub(crate) mod mmio;

@@ -11,7 +11,7 @@
 
 extern crate alloc;
 
-use crate::arch::aarch64::mmio::{delay_us, delay_us_sync};
+use crate::arch::aarch64::mmio::{delay_us, delay_us_sync, get_uptime_us};
 use crate::arch::aarch64::{mailbox_methods, mmu, phymem, virtmem};
 use alloc::boxed::Box;
 
@@ -26,6 +26,7 @@ pub(crate) mod ipc;
 mod kshell;
 pub(crate) mod ktask;
 mod lang_items;
+pub(crate) mod sleep_queue;
 pub(crate) mod utils;
 
 use crate::arch::aarch64::phymem::PhyAddr;
@@ -126,6 +127,7 @@ unsafe extern "C" fn kmain_on_stack(dtb_addr: *const u8) -> ! {
     println!("--- Bold Kernel v{} ---", env!("CARGO_PKG_VERSION"));
 
     arch::aarch64::interrupts::init();
+    arch::aarch64::init::init_multicore();
 
     // Should be skipped by exception handler
     // *(0x99999999 as *mut u8) = 0xaa;
@@ -313,7 +315,7 @@ unsafe extern "C" fn kmain_on_stack(dtb_addr: *const u8) -> ! {
 
     println!("[Done]");
     loop {
-        asm!("wfe");
+        asm!("wfi");
     }
     // qemu_exit::AArch64::new().exit(0);
 }

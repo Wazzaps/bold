@@ -12,16 +12,16 @@ pub unsafe fn exception_handler(etype: u64, esr: u64, elr: u64, spsr: u64, far: 
 #[repr(C)]
 pub struct ExceptionContext {
     /// General Purpose Registers.
-    gpr: [u64; 30],
+    pub gpr: [u64; 30],
 
     /// The link register, aka x30.
-    lr: u64,
+    pub lr: u64,
 
     /// Exception link register. The program counter at the time the exception happened.
-    elr_el1: u64,
+    pub elr_el1: u64,
 
     /// Saved program status.
-    spsr_el1: u64,
+    pub spsr_el1: u64,
 }
 
 #[no_mangle]
@@ -46,12 +46,12 @@ pub unsafe fn exception_handler2(e: &mut ExceptionContext) {
         e.elr_el1 += 4;
     } else {
         loop {
-            asm!("wfe");
+            asm!("wfi");
         }
     }
 }
 
 #[no_mangle]
-pub unsafe fn irq_handler(_e: &mut ExceptionContext) {
-    crate::arch::aarch64::interrupts::handle_irq();
+pub unsafe fn irq_handler(e: &mut ExceptionContext) {
+    crate::arch::aarch64::interrupts::handle_irq(e);
 }

@@ -183,7 +183,8 @@ impl fi::Read for Device {
         unsafe {
             // Wait for UART to become ready to receive.
             while mmio_read(UART1_MU_LSR) & 0x1 == 0 {
-                ktask::yield_now().await;
+                // Poll UART1 at 120hz (1000×1000÷120 = 8333us)
+                crate::arch::aarch64::mmio::sleep_us(8333).await;
             }
             buf[0] = mmio_read(UART1_MU_IO) as u8;
         }

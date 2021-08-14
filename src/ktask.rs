@@ -184,8 +184,7 @@ impl SimpleExecutor {
                     }
                 }
             } else {
-                println!("bye");
-                break;
+                unsafe { asm!("wfi") };
             }
         }
     }

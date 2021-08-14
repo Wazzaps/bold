@@ -1,4 +1,15 @@
 #[naked]
+unsafe extern "C" fn _park_core() -> ! {
+    asm!("1: wfi", "b 1b", options(noreturn))
+}
+
+pub unsafe fn init_multicore() {
+    *(0xe0 as *mut usize) = _park_core as usize;
+    *(0xe8 as *mut usize) = _park_core as usize;
+    *(0xf0 as *mut usize) = _park_core as usize;
+}
+
+#[naked]
 #[no_mangle]
 #[link_section = ".text.init"]
 unsafe extern "C" fn _start() -> ! {
@@ -10,7 +21,7 @@ unsafe extern "C" fn _start() -> ! {
         "",
         "1:",
         "    // core affinity != 0, halt it",
-        "    wfe",
+        "    wfi",
         "    b       1b",
         "",
         "2:",

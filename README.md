@@ -71,9 +71,12 @@ Mix of:
 - [ ] Dynamically sized virtual allocator for kernel data
     - [x] Dynamically map pages and allocate page tables
 - [x] Exception handling
-- [ ] Interrupts
+- [x] Interrupts
   - [ ] UART1 interrupts
-  - [ ] Timer interrupts
+  - [x] Timer interrupts
+- [ ] Multicore
+  - [x] Park cores properly
+  - [ ] Execute tasks
 - [ ] Make use of DTB
 - [ ] Parse tar initrd
 - [ ] Run code in EL0 (usermode)

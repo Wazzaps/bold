@@ -15,9 +15,7 @@ fn panic_handler(info: &PanicInfo) -> ! {
     }
     println!("--- Bold Kernel v{} Panic! ---", env!("CARGO_PKG_VERSION"));
     loop {
-        unsafe {
-            asm!("wfe");
-        }
+        unsafe { asm!("wfi") };
     }
     // qemu_exit::AArch64::new().exit(1)
     // poweroff(false);

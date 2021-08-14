@@ -1,4 +1,4 @@
-use crate::arch::aarch64::mmio::{delay_us, get_uptime_us};
+use crate::arch::aarch64::mmio::{get_uptime_us, sleep_us};
 use crate::driver_manager;
 use crate::driver_manager::DeviceType;
 use crate::fonts;
@@ -74,7 +74,7 @@ where
         PERF_INFO.lock().update(end - start);
     }
     if end < start + 16666 {
-        delay_us(16666 - (end - start)).await;
+        sleep_us(16666 - (end - start)).await;
     } else {
         yield_now().await;
     }

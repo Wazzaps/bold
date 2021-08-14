@@ -1,6 +1,11 @@
 #![allow(clippy::identity_op)]
 
 use crate::ktask;
+use crate::ktask::yield_now;
+use crate::println;
+use core::future::Future;
+use core::pin::Pin;
+use core::task::{Context, Poll};
 
 /// board type, raspi3
 pub const RASPI: u32 = 3;
@@ -211,6 +216,35 @@ pub async fn delay_us(time: u64) {
             }
         }
     }
+}
+
+pub async fn sleep_us(time_us: u64) {
+    struct Sleeper {
+        minimum_time: u64,
+        wanted_time: u64,
+    }
+
+    impl Future for Sleeper {
+        type Output = ();
+
+        fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+            let current_uptime = get_uptime_us();
+            if current_uptime < self.minimum_time {
+                crate::sleep_queue::push(self.wanted_time, cx.waker().clone());
+                Poll::Pending
+            } else {
+                Poll::Ready(())
+            }
+        }
+    }
+
+    let current_uptime = get_uptime_us();
+    yield_now().await;
+    Sleeper {
+        minimum_time: current_uptime + time_us - 1000, // 1ms resolution
+        wanted_time: current_uptime + time_us,
+    }
+    .await;
 }
 
 pub fn get_uptime_us() -> u64 {
