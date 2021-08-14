@@ -1,0 +1,13 @@
+version: 1
+updates:
+- package-ecosystem: cargo
+  directory: "/"
+  schedule:
+    interval: weekly
+  open-pull-requests-limit: 10
+  reviewers:
+  - Raz-B
+  - Wazzaps
+  assignees:
+  - Raz-B
+  - Wazzaps
