@@ -23,15 +23,19 @@ jobs:
         uses: actions/checkout@v1
         with:
           submodules: recursive
-      - name: Cache Cargo packages
+      - name: Cache Cargo packages and target
         uses: actions/cache@v2
         with:
-          key: boldos-caches-2
           path: |
-            /root/.cargo/registry
-            /wd/target
+            /root/.cargo/registry/index/
+            /root/.cargo/registry/cache/
+            /root/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       - name: Build
-        run: cargo build --release
+        run: cargo build --release --verbose
+      - name: ls target
+        run: ls target/**
       - name: Clippy
         run: cargo clippy --release
 #        continue-on-error: true
@@ -42,8 +46,8 @@ jobs:
         with:
           name: build-aarch64
           path: |
-            /wd/target/aarch64-none-elf/release/boldos
-            /wd/target/aarch64-none-elf/release/boldos.bin
-            /wd/target/aarch64-none-elf/release/initrd.tar
-            /wd/target/aarch64-none-elf/release/disk.img
+            target/aarch64-none-elf/release/boldos
+            target/aarch64-none-elf/release/boldos.bin
+            target/aarch64-none-elf/release/initrd.tar
+            target/aarch64-none-elf/release/disk.img
           if-no-files-found: error
