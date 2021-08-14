@@ -2,7 +2,7 @@ name: Nightly Rust CI Build
 
 on:
   push:
-    branches: [ master, temp/hacky_code ]
+    branches: [ master ]
   pull_request:
     branches: [ master ]
   workflow_dispatch:
@@ -12,7 +12,6 @@ env:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
 
     steps:
@@ -23,7 +22,9 @@ jobs:
         key: deps
     - name: Install dependancies
       run: sudo apt install binutils-aarch64-linux-gnu clang -y
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v1
+      with:
+        submodules: recursive
     - uses: actions/cache@v2
       with:
         path: |
