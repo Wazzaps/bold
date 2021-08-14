@@ -4,18 +4,25 @@ on:
     types: [opened]
   issue_comment:
     types: [created]
-    
+
 jobs:
   rebase:
     name: Rebase
-    if: github.event.pull_request.opened || (github.event.issue.pull_request != '' && contains(github.event.comment.body, '/rebase'))
+    #  if: github.event.pull_request.opened || (github.event.issue.pull_request != '' && contains(github.event.comment.body, '/rebase'))
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout the latest code
-        uses: actions/checkout@v2
-        with:
-          fetch-depth: 0 # otherwise, you will fail to push refs to dest repo
-      - name: Automatic Rebase
-        uses: cirrus-actions/rebase@1.4
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: debug the if statement
+        run: |
+          echo ${{ github.event.pull_request }}
+          echo ${{ github.event.pull_request.opened }}
+          echo ${{ github.event.comment.body }}
+          echo ${{ github.event.issue.pull_request }}
+          echo ${{ github.event.issue.pull_request != '' && contains(github.event.comment.body, '/rebase') }}
+      # - name: Checkout the latest code
+      #   uses: actions/checkout@v2
+      #   with:
+      #     fetch-depth: 0 # otherwise, you will fail to push refs to dest repo
+      # - name: Automatic Rebase
+      #   uses: cirrus-actions/rebase@1.4
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
