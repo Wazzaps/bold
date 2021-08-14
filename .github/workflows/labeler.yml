@@ -16,9 +16,9 @@ jobs:
           repo-token: "${{ secrets.GITHUB_TOKEN }}"
           sync-labels: true
       - name: Label the PR size
-        uses: codelytv/pr-size-labeler@v1.6.0
+        uses: codelytv/pr-size-labeler@v1
         with:
-          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           xs_max_size: "10"
           s_max_size: "100"
           m_max_size: "500"
