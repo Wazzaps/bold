@@ -1,6 +1,6 @@
 use crate::arch::aarch64::mailbox::{send_property_tag, send_property_tag_raw, TrimmedArray};
-use crate::arch::aarch64::phymem::{PhyAddr, PhySlice};
 use crate::console::Freq;
+use crate::prelude::*;
 use core::ops::Deref;
 use core::ptr::slice_from_raw_parts;
 

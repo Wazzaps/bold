@@ -1,8 +1,8 @@
 use crate::arch::aarch64::uart1::write_uart1;
 use crate::driver_manager::{drivers, DeviceType};
 use crate::fi;
-use crate::println;
-use crate::{ipc, ErrWarn};
+use crate::ipc;
+use crate::prelude::*;
 
 use alloc::string::ToString;
 use core::fmt;

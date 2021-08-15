@@ -1,4 +1,4 @@
-use crate::println;
+use crate::prelude::*;
 use core::fmt;
 use core::fmt::{Display, Formatter, Write};
 use core::ops::Deref;

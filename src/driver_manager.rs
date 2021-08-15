@@ -1,7 +1,9 @@
-use crate::{display_bstr, fi, println};
+use crate::fi;
+use crate::prelude::*;
+use core::fmt;
 use core::fmt::{Debug, Formatter};
+use core::mem;
 use core::ptr::{slice_from_raw_parts, slice_from_raw_parts_mut};
-use core::{fmt, mem};
 use spin::RwLock;
 
 extern "C" {

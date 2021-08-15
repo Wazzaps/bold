@@ -4,10 +4,8 @@ use crate::arch::aarch64::mmio::{
     UART0_FR, UART0_IBRD, UART0_ICR, UART0_IMSC, UART0_LCRH,
 };
 use crate::driver_manager::{DeviceType, DriverInfo};
-use crate::file_interface::IoResult;
+use crate::prelude::*;
 use crate::{driver_manager, fi, ktask};
-use alloc::prelude::v1::Box;
-use async_trait::async_trait;
 use core::cell::UnsafeCell;
 use spin::RwLock;
 

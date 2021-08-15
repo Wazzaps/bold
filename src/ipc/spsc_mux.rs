@@ -1,8 +1,6 @@
 use crate::ipc::{IpcRef, IpcSpscQueue};
 use crate::ktask;
-
-use crate::spawn_task;
-use alloc::boxed::Box;
+use crate::prelude::*;
 
 // TODO: make destructible
 pub fn mux_from_input(input: IpcRef) -> (IpcRef, IpcRef) {

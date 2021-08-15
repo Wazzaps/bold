@@ -3,9 +3,7 @@ use crate::arch::aarch64::mmio::{
     get_uptime_us, mmio_read, mmio_write, ENABLE_IRQS_1, ENABLE_IRQS_2, IRQ_PENDING_1,
     SYSTEM_TIMER_IRQ_1, TIMER_C1, TIMER_CLO, TIMER_CS, TIMER_CS_M1, UART_IRQ,
 };
-use crate::get_msr;
-use crate::println;
-use crate::set_msr_const;
+use crate::prelude::*;
 use crate::sleep_queue;
 use core::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use core::task::Waker;

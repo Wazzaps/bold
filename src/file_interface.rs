@@ -1,6 +1,5 @@
 use crate::framebuffer::FramebufferCM;
-use alloc::prelude::v1::Box;
-use async_trait::async_trait;
+use crate::prelude::*;
 
 pub type IoResult<T> = Result<T, ()>;
 

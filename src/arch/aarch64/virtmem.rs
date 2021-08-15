@@ -1,5 +1,4 @@
-use crate::arch::aarch64::phymem::PhySlice;
-use crate::println;
+use crate::prelude::*;
 use linked_list_allocator::{Heap, LockedHeap};
 
 #[global_allocator]

@@ -2,7 +2,7 @@ use crate::arch::aarch64::framebuffer::FramebufferInfo;
 use crate::arch::aarch64::mmio::{
     delay_us_sync, mmio_read, mmio_write, MBOX_READ, MBOX_STATUS, MBOX_WRITE,
 };
-use crate::println;
+use crate::prelude::*;
 use core::cmp::{max, min};
 use core::mem::size_of;
 use core::ops::{Deref, DerefMut};

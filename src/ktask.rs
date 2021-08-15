@@ -1,10 +1,5 @@
-use crate::arch::aarch64::interrupts::irq_lock;
 use crate::arch::aarch64::mmio::get_uptime_us;
-use crate::{println, AsciiStr};
-use alloc::boxed::Box;
-use alloc::collections::VecDeque;
-use alloc::sync::Arc;
-use alloc::vec::Vec;
+use crate::prelude::*;
 
 use core::sync::atomic::{AtomicUsize, Ordering};
 use core::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};

@@ -1,13 +1,8 @@
 #![allow(clippy::never_loop)]
-
 use crate::framebuffer_console;
 use crate::ktask;
+use crate::prelude::*;
 use crate::{fonts, ipc};
-use crate::{println, queue_write, queue_writeln, spawn_task};
-use crate::{AsciiStr, DurationFmt};
-use alloc::boxed::Box;
-use alloc::vec;
-use alloc::vec::Vec;
 use futures::future::BoxFuture;
 use futures::stream;
 use futures::StreamExt;

@@ -25,16 +25,15 @@ pub(crate) mod ipc;
 mod kshell;
 pub(crate) mod ktask;
 mod lang_items;
+pub(crate) mod prelude;
 pub(crate) mod sleep_queue;
 pub(crate) mod utils;
 
 use crate::arch::aarch64::uart1::init_uart1;
-use crate::console::dump_hex_slice;
-use crate::ErrWarn;
+use crate::prelude::*;
 
 use core::ptr::slice_from_raw_parts;
 pub(crate) use file_interface as fi;
-pub(crate) use utils::*;
 
 #[inline(always)]
 unsafe fn syscall1(num: usize, mut arg1: usize) -> usize {

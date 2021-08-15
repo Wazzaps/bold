@@ -1,7 +1,5 @@
 use crate::arch::aarch64::mmio;
-use crate::arch::aarch64::phymem::PhyAddr;
-use crate::{get_msr, println, set_msr};
-use alloc::boxed::Box;
+use crate::prelude::*;
 use core::mem::size_of;
 
 pub const PAGE_SIZE: u64 = 4096;

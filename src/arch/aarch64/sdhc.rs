@@ -1,7 +1,7 @@
 use crate::arch::aarch64::mmio::{
     delay, delay_us_sync, mmio_read, mmio_write, GPFSEL4, GPFSEL5, GPHEN1, GPPUD, GPPUDCLK1,
 };
-use crate::{print, println};
+use crate::prelude::*;
 
 pub struct Sdhc {
     sd_scr: [u32; 2],

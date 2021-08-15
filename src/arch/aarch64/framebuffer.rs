@@ -1,16 +1,12 @@
 use crate::arch::aarch64::mailbox::_send_fb_property_tags;
+use crate::prelude::*;
 
 use crate::arch::aarch64::mmu;
-use crate::arch::aarch64::mmu::PAGE_SIZE;
 use crate::arch::aarch64::phymem;
-use crate::arch::aarch64::phymem::{PhyAddr, PhySlice};
 use crate::driver_manager::{DeviceType, DriverInfo};
-use crate::file_interface::IoResult;
 use crate::framebuffer::FramebufferCM;
 use crate::{driver_manager, fi, println};
-use alloc::prelude::v1::Box;
 
-use async_trait::async_trait;
 use core::cell::UnsafeCell;
 use spin::{Mutex, RwLock};
 
@@ -49,27 +45,7 @@ impl driver_manager::Driver for Driver {
     fn early_init(&self) -> Result<(), ()> {
         unsafe {
             println!("Getting framebuffer");
-            // let current_size = mailbox_methods::get_framebuffer_phy_size()?;
-            // println!("{:?}", current_size);
-            // assert_eq!(
-            //     mailbox_methods::set_framebuffer_phy_size(FB_WIDTH, FB_HEIGHT)?,
-            //     (FB_WIDTH, FB_HEIGHT)
-            // );
-            // assert_eq!(
-            //     mailbox_methods::set_framebuffer_virt_size(FB_WIDTH, FB_HEIGHT)?,
-            //     (FB_WIDTH, FB_HEIGHT)
-            // );
-            // assert_eq!(mailbox_methods::set_framebuffer_virt_offset(0, 0)?, (0, 0));
-            // assert_eq!(mailbox_methods::set_framebuffer_depth(32)?, 32);
-            // // assert_eq!(
-            // //     mailbox_methods::set_framebuffer_pixel_order(FB_PIXEL_ORDER_BGR)?,
-            // //     FB_PIXEL_ORDER_BGR
-            // // );
-            //
-            // let slice = mailbox_methods::alloc_framebuffer(4096)?;
-            // assert_ne!(slice.base.0, 0);
-            // assert_ne!(slice.len, 0);
-            // let pitch = mailbox_methods::get_framebuffer_pitch()?;
+
             let fb_info = _send_fb_property_tags()?;
             println!("{:?}", fb_info);
             let slice = PhySlice {

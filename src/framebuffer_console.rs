@@ -4,14 +4,9 @@ use crate::driver_manager::DeviceType;
 use crate::fonts;
 use crate::framebuffer;
 use crate::ipc;
-use crate::ktask::yield_now;
-use crate::println;
-use crate::spawn_task;
-use crate::utils::ErrWarn;
-use alloc::boxed::Box;
+use crate::prelude::*;
 use core::sync::atomic::{AtomicBool, Ordering};
 use ipc::signal::Signal;
-use lazy_static::lazy_static;
 use spin::{Mutex, MutexGuard};
 
 pub struct PerfInfo {

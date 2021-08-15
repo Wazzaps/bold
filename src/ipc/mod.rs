@@ -5,11 +5,7 @@ pub(crate) mod spsc_mux;
 pub(crate) mod spsc_queue;
 pub(crate) mod well_known;
 
-use crate::{println, utils};
-use alloc::boxed::Box;
-use alloc::sync::Arc;
-use alloc::vec;
-use async_trait::async_trait;
+use crate::prelude::*;
 use core::fmt::{Debug, Formatter};
 pub use dir::IpcDir;
 use futures::stream::BoxStream;
@@ -25,7 +21,7 @@ pub struct IpcRef {
 
 impl Debug for IpcRef {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        utils::display_bstr(f, &self.inner.describe())?;
+        display_bstr(f, &self.inner.describe())?;
         write!(f, " {:x}", self.id)
     }
 }

@@ -1,9 +1,7 @@
 use crate::arch::aarch64::mmio::{mmio_read, mmio_write, UART0_DR, UART0_FR};
 use crate::driver_manager::{DeviceType, DriverInfo};
-use crate::file_interface::IoResult;
+use crate::prelude::*;
 use crate::{driver_manager, fi, ktask};
-use alloc::prelude::v1::Box;
-use async_trait::async_trait;
 use spin::RwLock;
 
 // ----- Driver -----

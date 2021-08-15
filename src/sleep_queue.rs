@@ -1,7 +1,7 @@
-use crate::arch::aarch64::interrupts::{irq_lock, wake_up_in};
+use crate::arch::aarch64::interrupts::wake_up_in;
 use crate::arch::aarch64::mmio::get_uptime_us;
 
-use alloc::collections::VecDeque;
+use crate::prelude::*;
 use core::task::Waker;
 use spin::{Mutex, Once};
 

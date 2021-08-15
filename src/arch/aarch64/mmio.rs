@@ -1,7 +1,7 @@
 #![allow(clippy::identity_op)]
 
 use crate::ktask;
-use crate::ktask::yield_now;
+use crate::prelude::*;
 
 use core::future::Future;
 use core::pin::Pin;
