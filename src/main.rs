@@ -16,6 +16,7 @@ use crate::arch::aarch64::{mailbox_methods, mmu, phymem, virtmem};
 use alloc::boxed::Box;
 
 pub(crate) mod arch;
+pub(crate) mod boot;
 pub(crate) mod console;
 pub(crate) mod driver_manager;
 mod file_interface;
