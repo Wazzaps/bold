@@ -11,8 +11,7 @@
 
 extern crate alloc;
 
-use crate::arch::aarch64::mmio::{delay_us, delay_us_sync, get_uptime_us};
-use crate::arch::aarch64::{mailbox_methods, mmu, phymem, virtmem};
+use crate::arch::aarch64::{mmu, phymem, virtmem};
 use alloc::boxed::Box;
 
 pub(crate) mod arch;
@@ -29,11 +28,10 @@ mod lang_items;
 pub(crate) mod sleep_queue;
 pub(crate) mod utils;
 
-use crate::arch::aarch64::phymem::PhyAddr;
 use crate::arch::aarch64::uart1::init_uart1;
-use crate::console::{dump_hex, dump_hex_slice};
+use crate::console::dump_hex_slice;
 use crate::ErrWarn;
-use core::ops::Deref;
+
 use core::ptr::slice_from_raw_parts;
 pub(crate) use file_interface as fi;
 pub(crate) use utils::*;

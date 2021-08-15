@@ -1,14 +1,17 @@
 use crate::arch::aarch64::exceptions::ExceptionContext;
 use crate::arch::aarch64::mmio::{
-    delay_us_sync, get_uptime_us, mmio_read, mmio_write, ENABLE_IRQS_1, ENABLE_IRQS_2,
-    IRQ_PENDING_1, SYSTEM_TIMER_IRQ_1, TIMER_C1, TIMER_CLO, TIMER_CS, TIMER_CS_M1, UART_IRQ,
+    get_uptime_us, mmio_read, mmio_write, ENABLE_IRQS_1, ENABLE_IRQS_2, IRQ_PENDING_1,
+    SYSTEM_TIMER_IRQ_1, TIMER_C1, TIMER_CLO, TIMER_CS, TIMER_CS_M1, UART_IRQ,
 };
+use crate::get_msr;
 use crate::println;
 use crate::set_msr_const;
-use crate::{print, sleep_queue};
+use crate::sleep_queue;
 use core::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use core::task::Waker;
+use cortex_a::registers::DAIF;
 use spin::Mutex;
+use tock_registers::interfaces::{Readable, Writeable};
 
 static NEXT_WAKEUP: AtomicU32 = AtomicU32::new(0);
 static NEXT_WAKER: Mutex<Option<Waker>> = Mutex::new(None);
@@ -18,6 +21,25 @@ static CALIBRATION_START_UPTIME_US: AtomicU64 = AtomicU64::new(0);
 static TIMER_FACTOR: AtomicU32 = AtomicU32::new(0);
 
 const CALIBRATION_DURATION: u32 = 100 * 1000; // 100 ms
+
+pub struct IrqLock {
+    prev_state: u64,
+}
+
+pub fn irq_lock() -> IrqLock {
+    let prev_state = unsafe { get_msr!(DAIF) };
+    unsafe { disable() };
+    assert_eq!(unsafe { get_msr!(DAIF) } & (1 << 7), 1 << 7);
+    assert_eq!(unsafe { get_msr!(DAIF) }, DAIF.get());
+    IrqLock { prev_state }
+}
+
+impl Drop for IrqLock {
+    fn drop(&mut self) {
+        DAIF.set(self.prev_state);
+        assert_eq!(DAIF.get(), self.prev_state);
+    }
+}
 
 pub unsafe fn enable() {
     set_msr_const!(daifclr, 2);
@@ -44,16 +66,25 @@ pub unsafe fn init() {
 
 pub fn wake_up_in(time_us: u64) {
     // FIXME: This whole place is probably Race-City, though it should only cause spurious wake-ups
-    let current_time = unsafe { mmio_read(TIMER_CLO) };
     let timer_factor = TIMER_FACTOR.load(Ordering::SeqCst);
     if timer_factor != 0 {
-        let ticks_to_sleep = ((time_us * timer_factor as u64) >> 16).min(1 << 32 - 1) as u32;
+        let ticks_to_sleep = ((time_us * timer_factor as u64) >> 16).min((1 << 32) - 1) as u32;
+        let current_time = unsafe { mmio_read(TIMER_CLO) };
         let new_wakeup_time = current_time.wrapping_add(ticks_to_sleep);
         let current_next_wakeup = NEXT_WAKEUP.load(Ordering::SeqCst);
         let current_ticks_to_sleep = current_next_wakeup.wrapping_sub(current_time);
+
         if ticks_to_sleep < current_ticks_to_sleep {
-            // println!("Setting timer to {}", ticks_to_sleep);
             unsafe { mmio_write(TIMER_C1, new_wakeup_time) };
+
+            let post_update_time = unsafe { mmio_read(TIMER_CLO) };
+            // FIXME: overflow situation?
+            if post_update_time > new_wakeup_time {
+                // We missed it, wakeup now
+                if let Some(waker) = NEXT_WAKER.lock().take() {
+                    waker.wake_by_ref();
+                }
+            }
         }
     }
 }
@@ -76,6 +107,21 @@ fn calc_timer_factor(
     }
 
     Ok(timer_factor as u32)
+}
+
+#[allow(dead_code, unused_variables)]
+unsafe fn print_stacktrace(e: &mut ExceptionContext) {
+    println!("@@@@");
+    let sp = get_msr!(sp_el0);
+    println!("- PC: 0x{:x} ", e.elr_el1);
+    println!("- LR: 0x{:x} ", e.lr);
+    for i in 0..128 {
+        let val = *(sp as *const u64).offset(i);
+        if (0x80000..=0x80000 + 0x3f400).contains(&val) {
+            println!("- {}: 0x{:x} ", i, val);
+        }
+    }
+    println!("@@@@");
 }
 
 unsafe fn handle_timer(_e: &mut ExceptionContext) {

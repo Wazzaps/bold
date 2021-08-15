@@ -6,7 +6,8 @@ use crate::arch::aarch64::mmio::{
 use crate::driver_manager::{DeviceType, DriverInfo};
 use crate::file_interface::IoResult;
 use crate::ipc;
-use crate::println;
+
+use crate::wtfln;
 use crate::{driver_manager, fi, ktask};
 use crate::{spawn_task, ErrWarn};
 use alloc::prelude::v1::Box;
@@ -184,7 +185,10 @@ impl fi::Read for Device {
             // Wait for UART to become ready to receive.
             while mmio_read(UART1_MU_LSR) & 0x1 == 0 {
                 // Poll UART1 at 120hz (1000×1000÷120 = 8333us)
+                wtfln!("(UART)");
                 crate::arch::aarch64::mmio::sleep_us(8333).await;
+                // crate::arch::aarch64::mmio::sleep_us(1010).await;
+                // yield_now().await;
             }
             buf[0] = mmio_read(UART1_MU_IO) as u8;
         }

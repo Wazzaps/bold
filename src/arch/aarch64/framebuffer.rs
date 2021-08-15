@@ -1,14 +1,15 @@
 use crate::arch::aarch64::mailbox::_send_fb_property_tags;
-use crate::arch::aarch64::mmio::delay;
+
+use crate::arch::aarch64::mmu;
 use crate::arch::aarch64::mmu::PAGE_SIZE;
+use crate::arch::aarch64::phymem;
 use crate::arch::aarch64::phymem::{PhyAddr, PhySlice};
-use crate::arch::aarch64::{mailbox, mmu};
-use crate::arch::aarch64::{mailbox_methods, phymem};
 use crate::driver_manager::{DeviceType, DriverInfo};
 use crate::file_interface::IoResult;
 use crate::framebuffer::FramebufferCM;
-use crate::{driver_manager, fi, print, println, ErrWarn};
+use crate::{driver_manager, fi, println};
 use alloc::prelude::v1::Box;
+
 use async_trait::async_trait;
 use core::cell::UnsafeCell;
 use spin::{Mutex, RwLock};
@@ -148,6 +149,21 @@ static mut DRIVER_REF: &dyn driver_manager::Driver = unsafe { &DRIVER };
 #[derive(Debug)]
 struct Device;
 
+fn draw_char(fb: *mut u8, pitch: u32, font: &'static [u8], char: u8, row: usize, col: usize) {
+    let char = char as usize;
+    let char = font[char * 8 * 16 * 4..(char + 1) * 8 * 16 * 4].as_ptr();
+
+    for y in 0..16 {
+        unsafe {
+            let dst = fb.offset((row as isize * 16 + y) * (pitch as isize) + col as isize * 8 * 4);
+            let src = char.offset(y * 8 * 4);
+            for x in 0..(8 * 4) {
+                dst.offset(x).write_volatile(*src.offset(x));
+            }
+        }
+    }
+}
+
 #[async_trait]
 impl fi::Control for Device {
     async fn call(&self, msg: FramebufferCM) -> IoResult<()> {
@@ -183,24 +199,44 @@ impl fi::Control for Device {
                 let pitch = fb_info.pitch;
 
                 if !fb.is_null() {
-                    let char = char as usize;
-                    let char = font[char * 8 * 16 * 4..(char + 1) * 8 * 16 * 4].as_ptr();
-
-                    for y in 0..16 {
-                        unsafe {
-                            let dst = fb.offset(
-                                (row as isize * 16 + y) * (pitch as isize) + col as isize * 8 * 4,
-                            );
-                            let src = char.offset(y * 8 * 4);
-                            for x in 0..(8 * 4) {
-                                dst.offset(x).write_volatile(*src.offset(x));
-                            }
-                        }
-                    }
+                    draw_char(fb, pitch, font, char, row, col);
                 }
             }
         }
         Ok(())
+    }
+}
+
+pub unsafe fn panic(message: &[u8]) {
+    DRIVER.fb_info.force_unlock();
+    let fb_info = DRIVER.fb_info.lock();
+    let fb: *mut u8 = fb_info.pointer as usize as *mut u8;
+    let width = fb_info.width;
+    let height = fb_info.height;
+    let pitch = fb_info.pitch;
+
+    if !fb.is_null() {
+        // Clear screen
+        for y in 0..height {
+            for x in 0..width {
+                let pixel = fb.offset((y * pitch + x * 4) as isize);
+                pixel.offset(0).write_volatile(69);
+                pixel.offset(1).write_volatile(27);
+                pixel.offset(2).write_volatile(49);
+            }
+        }
+
+        // Draw message
+        for (i, c) in message.iter().enumerate() {
+            draw_char(
+                fb,
+                pitch,
+                crate::fonts::TERMINUS.get(),
+                if *c == b'\n' { b' ' } else { *c },
+                3 + i / 70,
+                5 + i % 70,
+            );
+        }
     }
 }
 

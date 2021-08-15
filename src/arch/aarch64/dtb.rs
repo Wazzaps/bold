@@ -1,5 +1,5 @@
 use crate::{println, AsciiStr};
-use alloc::vec::Vec;
+
 use arrayvec::ArrayVec;
 use dtb::StructItem;
 

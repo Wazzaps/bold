@@ -1,5 +1,5 @@
 use crate::println;
-use alloc::vec;
+
 use arrayvec::ArrayVec;
 use core::fmt::{Debug, Formatter};
 use core::{fmt, ops};

@@ -31,6 +31,7 @@ version = "0.1.0"
 dependencies = [
  "arrayvec",
  "async-trait",
+ "cortex-a",
  "dtb",
  "futures",
  "lazy_static",
@@ -38,6 +39,16 @@ dependencies = [
  "qemu-exit",
  "spin 0.9.2",
  "tar-parser",
+ "tock-registers",
+]
+
+[[package]]
+name = "cortex-a"
+version = "6.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "509fc35485a2b4ddbacabe0bf2212cdfff88da93658608e5cc651afcb75b7733"
+dependencies = [
+ "tock-registers",
 ]
 
 [[package]]
@@ -234,6 +245,12 @@ version = "0.6.0"
 dependencies = [
  "nom",
 ]
+
+[[package]]
+name = "tock-registers"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ee8fba06c1f4d0b396ef61a54530bb6b28f0dc61c38bc8bc5a5a48161e6282e"
 
 [[package]]
 name = "unicode-xid"

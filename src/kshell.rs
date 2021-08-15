@@ -398,7 +398,7 @@ impl KShell {
                 return;
             }
         };
-        crate::framebuffer_console::set_font(font);
+        crate::framebuffer_console::set_font(font).await;
     }
 
     async fn handle_cmd_cd(&mut self, words: &[&[u8]]) {

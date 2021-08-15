@@ -12,7 +12,7 @@ use alloc::boxed::Box;
 use core::sync::atomic::{AtomicBool, Ordering};
 use ipc::signal::Signal;
 use lazy_static::lazy_static;
-use spin::Mutex;
+use spin::{Mutex, MutexGuard};
 
 pub struct PerfInfo {
     sample_us_sum: u64,
@@ -66,7 +66,10 @@ where
     F: FnMut() -> Fut,
     Fut: core::future::Future<Output = bool>,
 {
-    RENDER_WAKER.wait().await;
+    // FIXME: this is racy, fix when condvars are a thing
+    if !FRAMEBUFFER_DIRTY.swap(false, Ordering::SeqCst) {
+        RENDER_WAKER.wait().await;
+    }
     let start = get_uptime_us();
     let did_render = (f)().await;
     let end = get_uptime_us();
@@ -99,8 +102,24 @@ lazy_static! {
     static ref RENDER_WAKER: Signal = Signal::new();
 }
 
-pub fn set_font(font: &'static [u8]) {
-    STATE.lock().font = font;
+static FRAMEBUFFER_DIRTY: AtomicBool = AtomicBool::new(true);
+
+async fn yield_lock<T>(lock: &Mutex<T>) -> MutexGuard<'_, T> {
+    loop {
+        match lock.try_lock() {
+            None => {
+                yield_now().await;
+            }
+            Some(it) => {
+                return it;
+            }
+        }
+    }
+}
+
+pub async fn set_font(font: &'static [u8]) {
+    yield_lock(&STATE).await.font = font;
+    FRAMEBUFFER_DIRTY.store(true, Ordering::SeqCst);
     RENDER_WAKER.notify_all();
 }
 
@@ -192,7 +211,7 @@ pub fn init() {
                 match buf[0] {
                     // Newline
                     b'\n' => {
-                        let mut state = STATE.lock();
+                        let mut state = yield_lock(&STATE).await;
                         if state.cursor as usize > (state.text_buf.len() - 80) {
                             scroll_buffer(&mut *state);
                         } else {
@@ -201,7 +220,7 @@ pub fn init() {
                     }
                     // Backspace
                     0x7f | 0x08 => {
-                        let mut state = STATE.lock();
+                        let mut state = yield_lock(&STATE).await;
                         state.cursor = (state.cursor / 80 * 80).max(state.cursor - 1);
                     }
                     // Bell (ignored)
@@ -214,7 +233,7 @@ pub fn init() {
                             match buf[0] {
                                 b'[' => {
                                     if let Some(1) = output_queue.queue_read(&mut buf).await {
-                                        let mut state = STATE.lock();
+                                        let mut state = yield_lock(&STATE).await;
                                         // print_unk(buf[0], &mut state);
                                         match buf[0] {
                                             // Clear rest of line
@@ -242,7 +261,7 @@ pub fn init() {
                                     }
                                 }
                                 _ => {
-                                    let mut state = STATE.lock();
+                                    let mut state = yield_lock(&STATE).await;
                                     print_unk(buf[0], &mut state);
                                 }
                             }
@@ -250,26 +269,27 @@ pub fn init() {
                     }
                     // Normal letters
                     b' '..=b'~' => {
-                        let mut state = STATE.lock();
+                        let mut state = yield_lock(&STATE).await;
                         let cursor = state.cursor as usize;
                         state.text_buf[cursor] = buf[0];
                         state.cursor += 1;
                     }
                     // Unknown
                     _ => {
-                        let mut state = STATE.lock();
+                        let mut state = yield_lock(&STATE).await;
                         print_unk(buf[0], &mut state);
                     }
                 }
 
                 {
-                    let mut state = STATE.lock();
+                    let mut state = yield_lock(&STATE).await;
                     if (state.cursor as usize) >= state.text_buf.len() {
                         // state.cursor = state.text_buf.len() as u32 - 1;
                         scroll_buffer(&mut *state);
                     }
                 }
 
+                FRAMEBUFFER_DIRTY.store(true, Ordering::SeqCst);
                 RENDER_WAKER.notify_all();
             }
         }
@@ -286,10 +306,11 @@ pub fn init() {
             .unwrap();
         loop {
             vsync(async || {
-                for col in 0..80 {
-                    for row in 0..30 {
+                for row in 0..30 {
+                    let mut modified = false;
+                    for col in 0..80 {
                         {
-                            let mut state = STATE.try_lock().unwrap();
+                            let mut state = yield_lock(&STATE).await;
                             let font = state.font;
 
                             if state.text_buf[row * 80 + col] != state.last_text_buf[row * 80 + col]
@@ -306,13 +327,16 @@ pub fn init() {
                                     .warn();
                                 state.last_text_buf[row * 80 + col] =
                                     state.text_buf[row * 80 + col];
+                                modified = true;
                             }
                         }
+                    }
+                    if modified {
                         yield_now().await;
                     }
                 }
 
-                let mut state = STATE.try_lock().unwrap();
+                let mut state = yield_lock(&STATE).await;
                 if state.font.as_ptr() != state.last_font.as_ptr() {
                     state.last_font = state.font;
                 }

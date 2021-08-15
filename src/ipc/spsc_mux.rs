@@ -1,6 +1,6 @@
 use crate::ipc::{IpcRef, IpcSpscQueue};
 use crate::ktask;
-use crate::print;
+
 use crate::spawn_task;
 use alloc::boxed::Box;
 

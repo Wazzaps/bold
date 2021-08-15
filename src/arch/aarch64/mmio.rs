@@ -2,7 +2,7 @@
 
 use crate::ktask;
 use crate::ktask::yield_now;
-use crate::println;
+
 use core::future::Future;
 use core::pin::Pin;
 use core::task::{Context, Poll};

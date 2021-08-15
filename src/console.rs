@@ -1,9 +1,9 @@
 use crate::arch::aarch64::uart1::write_uart1;
 use crate::driver_manager::{drivers, DeviceType};
+use crate::fi;
 use crate::println;
-use crate::{fi, ktask};
 use crate::{ipc, ErrWarn};
-use alloc::boxed::Box;
+
 use alloc::string::ToString;
 use core::fmt;
 use core::fmt::Formatter;
@@ -35,6 +35,36 @@ macro_rules! print {
 macro_rules! println {
     () => ($crate::print!("\n"));
     ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
+}
+
+/// Like the `print!` macro in the standard library, but prints to the UART.
+#[macro_export]
+#[cfg(wtf_prints)]
+macro_rules! wtf {
+    ($($arg:tt)*) => ($crate::console::_print(format_args!($($arg)*)));
+}
+
+/// Like the `println!` macro in the standard library, but prints to the UART.
+#[macro_export]
+#[cfg(wtf_prints)]
+macro_rules! wtfln {
+    () => ($crate::print!("\n"));
+    ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
+}
+
+/// Like the `print!` macro in the standard library, but prints to the UART.
+#[macro_export]
+#[cfg(not(wtf_prints))]
+macro_rules! wtf {
+    ($($arg:tt)*) => {};
+}
+
+/// Like the `println!` macro in the standard library, but prints to the UART.
+#[macro_export]
+#[cfg(not(wtf_prints))]
+macro_rules! wtfln {
+    () => {};
+    ($($arg:tt)*) => {};
 }
 
 /// Like the `write!` macro in the standard library, but prints to the queue.

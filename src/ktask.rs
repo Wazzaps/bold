@@ -1,11 +1,12 @@
+use crate::arch::aarch64::interrupts::irq_lock;
 use crate::arch::aarch64::mmio::get_uptime_us;
 use crate::{println, AsciiStr};
 use alloc::boxed::Box;
 use alloc::collections::VecDeque;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
-use core::ptr::null;
-use core::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+
+use core::sync::atomic::{AtomicUsize, Ordering};
 use core::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 use core::{future::Future, pin::Pin};
 use spin::{Mutex, Once, RwLock};
@@ -121,19 +122,28 @@ impl SimpleExecutor {
     pub fn spawn(&self, task: Task) {
         let id = task.id;
         self.tasks.lock().push(Arc::new(RwLock::new(task)));
-        self.run_queue.lock().push_back(id);
+
+        {
+            let _locked = irq_lock();
+            self.run_queue.lock().push_back(id);
+        }
+
         let mut perf_info = PERF_INFO.lock();
         perf_info.tasks_spawned += 1;
     }
 
     pub fn run(&self) {
         loop {
-            let next_task = self.run_queue.lock().pop_front();
+            let next_task = {
+                let _locked = irq_lock();
+                let i = self.run_queue.lock().pop_front();
+                i
+            };
             if let Some(task_id) = next_task {
                 let waker = run_queue_waker(task_id);
                 let mut context = Context::from_waker(&waker);
 
-                let mut found_task = None;
+                let found_task;
                 if let Some(task) = self
                     .tasks
                     .lock()
@@ -142,7 +152,7 @@ impl SimpleExecutor {
                 {
                     found_task = Some(task.clone());
                 } else {
-                    println!("no task?");
+                    panic!("no task?");
                 }
 
                 if let Some(found_task) = found_task {
@@ -182,8 +192,15 @@ impl SimpleExecutor {
                             // task still needs to run
                         }
                     }
+                } else {
+                    panic!("no task? 2");
                 }
             } else {
+                let _locked = irq_lock();
+                if self.run_queue.lock().len() != 0 {
+                    // Run queue was updated! continue...
+                    continue;
+                }
                 unsafe { asm!("wfi") };
             }
         }
@@ -208,6 +225,7 @@ impl SimpleExecutor {
     }
 
     pub fn wake(&self, pid: usize) {
+        let _locked = irq_lock();
         let mut run_queue = self.run_queue.lock();
         if !run_queue.contains(&pid) {
             run_queue.push_back(pid);
@@ -221,10 +239,13 @@ fn run_queue_raw_waker(task_id: usize) -> RawWaker {
         run_queue_raw_waker(task_id as usize)
     }
     fn wake(task_id: *const ()) {
+        let _locked = irq_lock();
         EXECUTOR.wait().run_queue.lock().push_back(task_id as usize);
     }
     fn wake_by_ref(task_id: *const ()) {
-        EXECUTOR.wait().run_queue.lock().push_back(task_id as usize);
+        let _locked = irq_lock();
+        let exec = EXECUTOR.wait();
+        exec.run_queue.lock().push_back(task_id as usize);
     }
 
     let vtable = &RawWakerVTable::new(clone, wake, wake_by_ref, no_op);
