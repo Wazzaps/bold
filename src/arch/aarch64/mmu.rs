@@ -42,8 +42,8 @@ impl PageTable {
         let raw = &self.0[idx];
         if paddr != 0 {
             // FIXME: Assuming ident map
-            let vaddr = paddr as usize;
-            (f)((vaddr as *const PageTable).as_ref().map(|v| (raw, v)));
+            let vaddr = PhyAddr(paddr as usize).virt() as *const PageTable;
+            (f)(vaddr.as_ref().map(|v| (raw, v)));
         } else {
             (f)(None);
         }
@@ -58,8 +58,8 @@ impl PageTable {
         let raw = &mut self.0[idx];
         if paddr != 0 {
             // FIXME: Assuming ident map
-            let vaddr = paddr as usize;
-            (f)((vaddr as *mut PageTable).as_mut().map(|v| (raw, v)));
+            let vaddr = PhyAddr(paddr as usize).virt_mut() as *mut PageTable;
+            (f)(vaddr.as_mut().map(|v| (raw, v)));
         } else {
             (f)(None);
         }
@@ -100,12 +100,17 @@ extern "C" {
     static mut __dma_end: u8;
 }
 
+/// # Safety
+///
+/// This function assumes it runs only once, from low memory
 pub unsafe fn init() -> Result<(), ()> {
-    println!("[DBUG] CurrentEL: {}", (get_msr!(CurrentEL) >> 2) & 0b11);
+    // println!("[DBUG] CurrentEL: {}", (get_msr!(CurrentEL) >> 2) & 0b11);
+    let mut paging =
+        &mut *((&mut PAGING as *mut PageTables as usize & 0xffffffff) as *mut PageTables);
 
     // Identity map user area, L1 Table
-    PAGING.user_l1.0[0] = {
-        (PAGING.user_l2.0.as_ptr() as u64) | // Physical address
+    paging.user_l1.0[0] = {
+        (paging.user_l2.0.as_ptr() as u64) | // Physical address
             PT_PAGE |     // it has the "Present" flag, which must be set, and we have area in it mapped by pages
             PT_AF |       // accessed flag. Without this we're going to have a Data Abort exception
             PT_USER |     // non-privileged
@@ -114,8 +119,8 @@ pub unsafe fn init() -> Result<(), ()> {
     };
 
     // Identity map user area, L2 Table, first block
-    PAGING.user_l2.0[0] = {
-        (PAGING.user_l3.0.as_ptr() as u64) | // Physical address
+    paging.user_l2.0[0] = {
+        (paging.user_l3.0.as_ptr() as u64) | // Physical address
             PT_PAGE |     // it has the "Present" flag, which must be set, and we have area in it mapped by pages
             PT_AF |       // accessed flag. Without this we're going to have a Data Abort exception
             PT_USER |     // non-privileged
@@ -125,11 +130,11 @@ pub unsafe fn init() -> Result<(), ()> {
 
     // Identity map user area, L2 Table
     let iomem_cutoff = (mmio::MMIO_BASE >> 21) as usize;
-    let data_cutoff = ((&__data_start) as *const u8 as u64 / PAGE_SIZE) as usize;
-    let dma_start = ((&__dma_start) as *const u8 as u64 / PAGE_SIZE) as usize;
-    let dma_end = ((&__dma_end) as *const u8 as u64 / PAGE_SIZE) as usize;
-    println!("dma_start = 0x{:x}, dma_end = 0x{:x}", dma_start, dma_end);
-    for (i, tbl) in PAGING.user_l2.0.iter_mut().enumerate().skip(1) {
+    let data_cutoff = (((&__data_start) as *const u8 as u64 & 0xffffffff) / PAGE_SIZE) as usize;
+    let dma_start = (((&__dma_start) as *const u8 as u64 & 0xffffffff) / PAGE_SIZE) as usize;
+    let dma_end = (((&__dma_end) as *const u8 as u64 & 0xffffffff) / PAGE_SIZE) as usize;
+    // println!("dma_start = 0x{:x}, dma_end = 0x{:x}", dma_start, dma_end);
+    for (i, tbl) in paging.user_l2.0.iter_mut().enumerate().skip(1) {
         *tbl = {
             (i << 21) as u64 | // Physical address
                 PT_BLOCK |    // map 2M block
@@ -138,7 +143,7 @@ pub unsafe fn init() -> Result<(), ()> {
                 PT_USER |     // non-privileged
                 // different attributes for device memory
                 if i >= iomem_cutoff {
-                    println!("Defining 0x{:x} as DMA memory", i << 21);
+                    // println!("Defining 0x{:x} as DMA memory", i << 21);
                     PT_OSH | PT_DEV
                 } else {
                     PT_ISH | PT_MEM
@@ -147,14 +152,14 @@ pub unsafe fn init() -> Result<(), ()> {
     }
 
     // User L3 table
-    for (i, tbl) in PAGING.user_l3.0.iter_mut().enumerate() {
+    for (i, tbl) in paging.user_l3.0.iter_mut().enumerate() {
         *tbl = {
             (i as u64 * PAGE_SIZE) | // Physical address
                 PT_PAGE |     // map 4k
                 PT_AF |       // accessed flag
                 PT_USER |     // non-privileged
                 if i >= dma_start && i < dma_end {
-                    println!("Defining 0x{:x} as DMA memory", i as u64 * PAGE_SIZE);
+                    // println!("Defining 0x{:x} as DMA memory", i as u64 * PAGE_SIZE);
                     PT_OSH | PT_NC | PT_RW | PT_NX
                 } else if i < 0x80 || i >= data_cutoff {
                     PT_MEM | PT_ISH | PT_RW | PT_NX
@@ -163,39 +168,6 @@ pub unsafe fn init() -> Result<(), ()> {
                 }
         };
     }
-
-    // Map kernel area, L1 Table
-    // PAGING.kernel_l1[511] = {
-    //     (PAGING.kernel_l2.as_ptr() as u64) | // Physical address
-    //         PT_PAGE |     // it has the "Present" flag, which must be set, and we have area in it mapped by pages
-    //         PT_AF |       // accessed flag. Without this we're going to have a Data Abort exception
-    //         PT_KERNEL |     // privileged
-    //         PT_ISH |      // inner shareable
-    //         PT_MEM // normal memory
-    // };
-    //
-    // // Map kernel area, L2 Table
-    // PAGING.kernel_l2[511] = {
-    //     (PAGING.kernel_l3.as_ptr() as u64) | // Physical address
-    //         PT_PAGE |     // it has the "Present" flag, which must be set, and we have area in it mapped by pages
-    //         PT_AF |       // accessed flag. Without this we're going to have a Data Abort exception
-    //         PT_KERNEL |     // privileged
-    //         PT_ISH |      // inner shareable
-    //         PT_MEM // normal memory
-    // };
-    //
-    // // Map kernel area, L3 Table
-    // for (i, tbl) in PAGING.kernel_l3.iter_mut().enumerate() {
-    //     *tbl = {
-    //         (i as u64 * PAGE_SIZE) | // Physical address
-    //             PT_PAGE |     // it has the "Present" flag, which must be set, and we have area in it mapped by pages
-    //             PT_AF |       // accessed flag. Without this we're going to have a Data Abort exception
-    //             PT_NX |
-    //             PT_KERNEL |     // privileged
-    //             PT_OSH |
-    //             PT_DEV
-    //     }
-    // }
 
     // Verify MMU is capable
     let id_aa64mmfr0_el1 = get_msr!(id_aa64mmfr0_el1);
@@ -238,10 +210,11 @@ pub unsafe fn init() -> Result<(), ()> {
     asm!("isb");
 
     // Tell the MMU where our translation tables are. TTBR_CNP bit not documented, but required
+    let paging_addr = (paging.user_l1.0.as_ptr() as u64) & 0xffffffff;
     // - lower half, user space
-    set_msr!(ttbr0_el1, PAGING.user_l1.0.as_ptr() as u64 + TTBR_CNP);
+    set_msr!(ttbr0_el1, paging_addr + TTBR_CNP);
     // - upper half, kernel space
-    // set_msr!(ttbr1_el1, PAGING.kernel_l1.as_ptr() as u64 + TTBR_CNP);
+    set_msr!(ttbr1_el1, paging_addr + TTBR_CNP);
 
     // Finally, toggle some bits in system control register to enable page translation
     asm!("dsb ish", "isb", options(nomem, nostack));
@@ -262,12 +235,21 @@ pub unsafe fn init() -> Result<(), ()> {
     set_msr!(sctlr_el1, sctlr_el1);
     asm!("isb");
 
-    println!("[DBUG] MMU Initialized");
+    // println!("[DBUG] MMU Initialized");
     Ok(())
 }
 
-pub unsafe fn virt2pte_mut<F: FnMut(Option<(&mut u64, usize)>)>(mut vaddr: usize, mut f: F) {
+pub unsafe fn eject_lowmem() {
+    extern "C" {
+        static mut _vectors: u8;
+    }
+    set_msr!(vbar_el1, &_vectors as *const u8 as usize);
+    set_msr!(ttbr0_el1, 0);
+}
+
+pub unsafe fn virt2pte_mut<F: FnMut(Option<(&mut u64, usize)>)>(vaddr: usize, mut f: F) {
     // TODO: Only supports ttbr0 for now
+    let mut vaddr = vaddr & 0x7fffffffff;
     let lvl3_offset = vaddr % (PAGE_SIZE as usize);
     vaddr -= lvl3_offset;
 

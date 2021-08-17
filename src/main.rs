@@ -49,31 +49,29 @@ unsafe fn syscall1(num: usize, mut arg1: usize) -> usize {
 ///
 /// This function assumes it runs only once, on a clean machine
 /// It also assumes dtb_addr is either a valid dtb or null
+///
+/// Don't do complex things (e.g like printing) that might leave lowmem pointers dangling
 #[no_mangle]
-pub unsafe extern "C" fn kmain(dtb_addr: *const u8) -> ! {
-    init_uart1();
+pub unsafe extern "C" fn kmain(dtb_addr: PhyAddr) -> ! {
     // Init mmu so devices work
     mmu::init().unwrap();
 
-    // Earlycon
-    console::set_main_console_by_name(b"Raspberry Pi 3 UART1");
-    println!("[INFO] Early console working");
+    let real_kmain_addr = PhyAddr(kmain_mmu as *const () as usize).virt();
+    // let real_kmain_addr = kmain_mmu as *const () as usize;
+    let real_kmain_addr: unsafe extern "C" fn(PhyAddr) -> ! = core::mem::transmute(real_kmain_addr);
+    (real_kmain_addr)(dtb_addr)
+}
 
-    // let mac = mailbox_methods::get_nic_mac().unwrap();
-    // println!(
-    //     "[INFO] MAC Address = {:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
-    //     mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]
-    // );
-
+/// Don't do complex things (e.g like printing) that might leave lowmem pointers dangling
+#[no_mangle]
+pub unsafe extern "C" fn kmain_mmu(dtb_addr: PhyAddr) -> ! {
     // Physical Memory allocator
     {
         let mut phymem = phymem::PHYMEM_FREE_LIST.lock();
         phymem.init();
     }
 
-    driver_manager::early_init_all_drivers();
-
-    // Create new stack for interrupts
+    // Create new stack for ourselves
     let core0_stack = {
         let mut phymem = phymem::PHYMEM_FREE_LIST.lock();
         phymem
@@ -81,19 +79,29 @@ pub unsafe extern "C" fn kmain(dtb_addr: *const u8) -> ! {
             .expect("Failed to allocate core 0 stack")
     };
 
-    println!("[DBUG] core 0 stack at: {:?}", core0_stack);
+    // println!("[DBUG] core 0 stack at: {:?}", core0_stack);
     asm!(
         "mov sp, {:x}",
         "mov x0, {:x}",
         "b kmain_on_stack",
-        in(reg) core0_stack.base.0 + core0_stack.len,
-        in(reg) dtb_addr,
+        in(reg) (core0_stack.base.virt_mut() as usize) + core0_stack.len,
+        in(reg) dtb_addr.0,
         options(noreturn)
     )
 }
 
 #[no_mangle]
-unsafe extern "C" fn kmain_on_stack(dtb_addr: *const u8) -> ! {
+unsafe extern "C" fn kmain_on_stack(dtb_addr: PhyAddr) -> ! {
+    println!("[DBUG] Ejecting lowmem...");
+    mmu::eject_lowmem();
+    println!("[DBUG] Eject success!");
+
+    // Early console
+    init_uart1();
+    console::set_main_console_by_name(b"Raspberry Pi 3 UART1");
+
+    driver_manager::early_init_all_drivers();
+
     // Virtual Memory allocator
     {
         let mut phymem = phymem::PHYMEM_FREE_LIST.lock();
@@ -103,7 +111,8 @@ unsafe extern "C" fn kmain_on_stack(dtb_addr: *const u8) -> ! {
         virtmem::init(kernel_virtmem);
     }
 
-    if !dtb_addr.is_null() {
+    if dtb_addr.0 != 0 {
+        let dtb_addr = dtb_addr.virt() as *const u8;
         println!("[DBUG] DTB @ {:p} snippet:", dtb_addr);
         let something = &*slice_from_raw_parts(dtb_addr, 128);
         dump_hex_slice(something);
@@ -112,6 +121,12 @@ unsafe extern "C" fn kmain_on_stack(dtb_addr: *const u8) -> ! {
     } else {
         println!("[DBUG] No DTB given");
     }
+
+    // let mac = mailbox_methods::get_nic_mac().unwrap();
+    // println!(
+    //     "[INFO] MAC Address = {:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+    //     mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]
+    // );
 
     // IPC
     ipc::init();
@@ -125,17 +140,6 @@ unsafe extern "C" fn kmain_on_stack(dtb_addr: *const u8) -> ! {
 
     arch::aarch64::interrupts::init();
     arch::aarch64::init::init_multicore();
-
-    // Should be skipped by exception handler
-    // *(0x99999999 as *mut u8) = 0xaa;
-
-    // Test timer (interrupts not working yet)
-    // set_msr!(CNTP_TVAL_EL0, 10000);
-    // set_msr!(CNTP_CTL_EL0, 3);
-    // for _ in 0..10 {
-    //     println!("{} {:x}", get_msr!(CNTP_CTL_EL0), get_msr!(CNTP_TVAL_EL0));
-    //     delay_us_sync(1);
-    // }
 
     // // IPC test
     // // ktask::SimpleExecutor::run_blocking(ktask::Task::new_raw(b"IPC Test", Box::pin(ipc::test())));
@@ -229,9 +233,6 @@ unsafe extern "C" fn kmain_on_stack(dtb_addr: *const u8) -> ! {
     //         }
     //     }
     // });
-
-    // Call syscall (not yet implemented)
-    // println!("result = 0x{:x}", syscall1(123, 321));
 
     // let mut sdhc = arch::aarch64::sdhc::Sdhc::init().unwrap();
     // let mut buf = [0; 512 / 4];

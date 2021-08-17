@@ -55,7 +55,7 @@ impl driver_manager::Driver for Driver {
 
             *self.fb_info.lock() = fb_info;
 
-            let pointer = slice.base.0;
+            let pointer = slice.base.virt_mut() as usize;
             let page_count = ((slice.len as u64 + PAGE_SIZE - 1) / PAGE_SIZE) as usize;
             phymem::reserve(slice).unwrap();
             for page in 0..page_count {
@@ -146,12 +146,12 @@ impl fi::Control for Device {
         match msg {
             FramebufferCM::DrawExample { variant } => {
                 let fb_info = unsafe { DRIVER.fb_info.lock() };
-                let fb: *mut u8 = fb_info.pointer as usize as *mut u8;
-                let width = fb_info.width;
-                let height = fb_info.height;
-                let pitch = fb_info.pitch;
+                if fb_info.pointer != 0 {
+                    let fb = unsafe { PhyAddr(fb_info.pointer as usize).virt_mut() as *mut u8 };
+                    let width = fb_info.width;
+                    let height = fb_info.height;
+                    let pitch = fb_info.pitch;
 
-                if !fb.is_null() {
                     for y in 0..height {
                         for x in 0..width {
                             unsafe {
@@ -171,10 +171,10 @@ impl fi::Control for Device {
                 col,
             } => {
                 let fb_info = unsafe { DRIVER.fb_info.lock() };
-                let fb: *mut u8 = fb_info.pointer as usize as *mut u8;
-                let pitch = fb_info.pitch;
+                if fb_info.pointer != 0 {
+                    let fb = unsafe { PhyAddr(fb_info.pointer as usize).virt_mut() as *mut u8 };
+                    let pitch = fb_info.pitch;
 
-                if !fb.is_null() {
                     draw_char(fb, pitch, font, char, row, col);
                 }
             }
@@ -186,12 +186,12 @@ impl fi::Control for Device {
 pub unsafe fn panic(message: &[u8]) {
     DRIVER.fb_info.force_unlock();
     let fb_info = DRIVER.fb_info.lock();
-    let fb: *mut u8 = fb_info.pointer as usize as *mut u8;
-    let width = fb_info.width;
-    let height = fb_info.height;
-    let pitch = fb_info.pitch;
+    if fb_info.pointer != 0 {
+        let fb = unsafe { PhyAddr(fb_info.pointer as usize).virt_mut() as *mut u8 };
+        let width = fb_info.width;
+        let height = fb_info.height;
+        let pitch = fb_info.pitch;
 
-    if !fb.is_null() {
         // Clear screen
         for y in 0..height {
             for x in 0..width {

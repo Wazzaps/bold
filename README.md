@@ -83,6 +83,7 @@ Mix of:
 - [ ] Multicore
   - [x] Park cores properly
   - [ ] Execute tasks
+- [x] Higher-half kernel
 - [ ] Make use of DTB
 - [ ] Parse tar initrd
 - [ ] Run code in EL0 (usermode)

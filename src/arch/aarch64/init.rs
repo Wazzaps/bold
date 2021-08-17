@@ -1,12 +1,14 @@
+use crate::prelude::*;
+
 #[naked]
 unsafe extern "C" fn _park_core() -> ! {
     asm!("1: wfi", "b 1b", options(noreturn))
 }
 
 pub unsafe fn init_multicore() {
-    *(0xe0 as *mut usize) = _park_core as usize;
-    *(0xe8 as *mut usize) = _park_core as usize;
-    *(0xf0 as *mut usize) = _park_core as usize;
+    *(PhyAddr(0xe0).virt_mut() as *mut usize) = _park_core as usize & 0xffffffff;
+    *(PhyAddr(0xe8).virt_mut() as *mut usize) = _park_core as usize & 0xffffffff;
+    *(PhyAddr(0xf0).virt_mut() as *mut usize) = _park_core as usize & 0xffffffff;
 }
 
 #[naked]
@@ -65,6 +67,7 @@ unsafe extern "C" fn _start() -> ! {
         "    msr     sctlr_el1, x2",
         "// set up exception handlers",
         "    ldr     x2, =_vectors",
+        "    mov     w2, w2", // FIXME: Truncate _vectors to 32bit, ignoring highmem
         "    msr     vbar_el1, x2",
         "    // change execution level to EL1",
         "    mov     x2, #0x3c4",
@@ -74,10 +77,12 @@ unsafe extern "C" fn _start() -> ! {
         "    eret",
         "",
         "5:",
+        "    mov     w1, w1", // FIXME: Truncate sp to 32bit, ignoring highmem
         "    mov     sp, x1",
         "",
         "    // load the start address and number of bytes in BSS section",
         "    ldr     x1, =__bss_start",
+        "    mov     w1, w1", // FIXME: Truncate bss_start to 32bit, ignoring highmem
         "    ldr     x2, =__bss_length",
         "",
         "3:",
@@ -94,6 +99,7 @@ unsafe extern "C" fn _start() -> ! {
         "    // align vectors to 2048 bytes",
         "    .align 11",
         "",
+        ".global _vectors",
         "_vectors:",
         "// synchronous",
         ".align  7",

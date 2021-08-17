@@ -1,6 +1,7 @@
 use crate::prelude::*;
 
 use core::fmt::{Debug, Formatter};
+use core::ptr::{slice_from_raw_parts, slice_from_raw_parts_mut};
 use core::{fmt, ops};
 use spin::Mutex;
 
@@ -33,6 +34,26 @@ impl Debug for PhyAddr {
 impl Debug for PhySlice {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "0p{:x}..0p{:x}", self.base.0, self.base.0 + self.len)
+    }
+}
+
+impl PhyAddr {
+    pub unsafe fn virt(&self) -> *const () {
+        (self.0 | 0xffff_ff80_0000_0000u64 as usize) as *const ()
+    }
+
+    pub unsafe fn virt_mut(&self) -> *mut () {
+        (self.0 | 0xffff_ff80_0000_0000u64 as usize) as *mut ()
+    }
+}
+
+impl PhySlice {
+    pub unsafe fn virt(&self) -> &'static [u8] {
+        &*slice_from_raw_parts(self.base.virt() as *const u8, self.len)
+    }
+
+    pub unsafe fn virt_mut(&self) -> &'static mut [u8] {
+        &mut *slice_from_raw_parts_mut(self.base.virt() as *mut u8, self.len)
     }
 }
 
@@ -113,10 +134,10 @@ impl FreeList {
         const END_RESERVE: usize = 0xf000000;
         const END_RESERVE_PAGES: usize = END_RESERVE / PAGE_SIZE;
 
-        let ram_start = &__ram_start as *const u8 as usize;
-        let ram_end = &__ram_end as *const u8 as usize;
-        let ram_start_pages = (&__ram_start as *const u8 as usize) / PAGE_SIZE;
-        let ram_end_pages = (&__ram_end as *const u8 as usize) / PAGE_SIZE;
+        let ram_start = &__ram_start as *const u8 as usize & 0xffffffff;
+        let ram_end = &__ram_end as *const u8 as usize & 0xffffffff;
+        let ram_start_pages = (&__ram_start as *const u8 as usize & 0xffffffff) / PAGE_SIZE;
+        let ram_end_pages = (&__ram_end as *const u8 as usize & 0xffffffff) / PAGE_SIZE;
         println!(
             "[DBUG] Phymem range: 0p{:x}..0p{:x}",
             ram_start,

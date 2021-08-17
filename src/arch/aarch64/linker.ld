@@ -1,5 +1,5 @@
 SECTIONS {
-  . = 0x80000; /* Raspbery Pi 3 Aarch64 (kernel8.img) load address */
+  . = 0xffffff8000080000; /* Raspbery Pi 3 Aarch64 (kernel8.img) load address @ highmem */
 
   /* start of the binary */
   _start = .;

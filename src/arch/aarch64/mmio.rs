@@ -134,11 +134,11 @@ pub const TIMER_CS_M2: u32 = 1 << 2;
 pub const TIMER_CS_M3: u32 = 1 << 3;
 
 pub unsafe fn mmio_read(addr: u32) -> u32 {
-    (addr as usize as *const u32).read_volatile()
+    (PhyAddr(addr as usize).virt() as *const u32).read_volatile()
 }
 
 pub unsafe fn mmio_write(addr: u32, value: u32) {
-    (addr as usize as *mut u32).write_volatile(value);
+    (PhyAddr(addr as usize).virt_mut() as *mut u32).write_volatile(value);
 }
 
 #[inline(always)]
