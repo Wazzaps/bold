@@ -24,7 +24,7 @@ unsafe fn cstr_ptr_to_asciistr(ptr: *const u8) -> AsciiStr<'static> {
     AsciiStr(slice)
 }
 
-pub unsafe fn handle_syscall(e: &mut ExceptionContext, syscall_no: Syscall) {Usermode
+pub unsafe fn handle_syscall(e: &mut ExceptionContext, syscall_no: Syscall) {
     match syscall_no {
         Syscall::Exit => {
             unimplemented!();
