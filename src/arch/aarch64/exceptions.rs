@@ -1,4 +1,5 @@
 use crate::prelude::*;
+use core::convert::TryFrom;
 
 #[no_mangle]
 pub unsafe fn exception_handler(etype: u64, esr: u64, elr: u64, spsr: u64, far: u64) -> ! {
@@ -26,6 +27,20 @@ pub struct ExceptionContext {
 
 #[no_mangle]
 pub unsafe fn exception_handler2(e: &mut ExceptionContext) {
+    if get_msr!(esr_el1) == 0x56000000 {
+        match crate::syscalls::Syscall::try_from(e.gpr[0]) {
+            Ok(syscall_no) => {
+                crate::syscalls::handle_syscall(e, syscall_no);
+            }
+            Err(_) => {
+                // Unknown syscall, return error
+                println!("[WARN] Called unknown syscall 0x{:x}", e.gpr[0]);
+                e.gpr[0] = 0xffffffffffffffff;
+            }
+        }
+        return;
+    }
+
     println!("-------------------------------------------");
     // let sp = (e as *const ExceptionContext as *const u8)
     //     .offset(size_of::<ExceptionContext>() as isize) as *const u64;

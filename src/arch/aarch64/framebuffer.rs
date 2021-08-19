@@ -187,7 +187,7 @@ pub unsafe fn panic(message: &[u8]) {
     DRIVER.fb_info.force_unlock();
     let fb_info = DRIVER.fb_info.lock();
     if fb_info.pointer != 0 {
-        let fb = unsafe { PhyAddr(fb_info.pointer as usize).virt_mut() as *mut u8 };
+        let fb = PhyAddr(fb_info.pointer as usize).virt_mut() as *mut u8;
         let width = fb_info.width;
         let height = fb_info.height;
         let pitch = fb_info.pitch;

@@ -27,6 +27,7 @@ pub(crate) mod ktask;
 mod lang_items;
 pub(crate) mod prelude;
 pub(crate) mod sleep_queue;
+pub(crate) mod syscalls;
 pub(crate) mod utils;
 
 use crate::arch::aarch64::uart1::init_uart1;
@@ -309,6 +310,7 @@ unsafe extern "C" fn kmain_on_stack(dtb_addr: PhyAddr) -> ! {
         );
     });
 
+    spawn_task!(b"Usermode Task", { syscalls::usermode().await });
     ktask::run();
 
     println!("[Done]");
