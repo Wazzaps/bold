@@ -2,7 +2,7 @@ name: Nightly Rust CI Build
 
 on:
   push:
-    branches: [master develop]
+    branches: [master]
     paths:
       - ".github/workflows/rust-nightly-ci.yaml"
       - "src/*"
@@ -10,7 +10,7 @@ on:
       - "Cargo.{toml,lock}"
       - "targets/*"
   pull_request:
-    branches: [master develop]
+    branches: [master]
   workflow_dispatch:
 
 env:
