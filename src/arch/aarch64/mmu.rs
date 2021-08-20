@@ -30,7 +30,7 @@ const TTBR_CNP: u64 = 1;
 static mut PAGING: PageTables = unsafe { PageTables::new() };
 
 #[repr(C, align(4096))]
-struct PageTable(pub [u64; 512]);
+pub struct PageTable(pub [u64; 512]);
 
 impl PageTable {
     pub const unsafe fn new() -> Self {
@@ -113,7 +113,7 @@ pub unsafe fn init() -> Result<(), ()> {
         (paging.user_l2.0.as_ptr() as u64) | // Physical address
             PT_PAGE |     // it has the "Present" flag, which must be set, and we have area in it mapped by pages
             PT_AF |       // accessed flag. Without this we're going to have a Data Abort exception
-            PT_USER |     // non-privileged
+            PT_KERNEL |     // non-privileged
             PT_ISH |      // inner shareable
             PT_MEM // normal memory
     };
@@ -123,7 +123,7 @@ pub unsafe fn init() -> Result<(), ()> {
         (paging.user_l3.0.as_ptr() as u64) | // Physical address
             PT_PAGE |     // it has the "Present" flag, which must be set, and we have area in it mapped by pages
             PT_AF |       // accessed flag. Without this we're going to have a Data Abort exception
-            PT_USER |     // non-privileged
+            PT_KERNEL |     // non-privileged
             PT_ISH |      // inner shareable
             PT_MEM // normal memory
     };
@@ -140,7 +140,7 @@ pub unsafe fn init() -> Result<(), ()> {
                 PT_BLOCK |    // map 2M block
                 PT_AF |       // accessed flag
                 PT_NX |       // no execute
-                PT_USER |     // non-privileged
+                PT_KERNEL |     // non-privileged
                 // different attributes for device memory
                 if i >= iomem_cutoff {
                     // println!("Defining 0x{:x} as DMA memory", i << 21);
@@ -157,7 +157,7 @@ pub unsafe fn init() -> Result<(), ()> {
             (i as u64 * PAGE_SIZE) | // Physical address
                 PT_PAGE |     // map 4k
                 PT_AF |       // accessed flag
-                PT_USER |     // non-privileged
+                PT_KERNEL |     // non-privileged
                 if i >= dma_start && i < dma_end {
                     // println!("Defining 0x{:x} as DMA memory", i as u64 * PAGE_SIZE);
                     PT_OSH | PT_NC | PT_RW | PT_NX
@@ -301,9 +301,18 @@ pub unsafe fn virt2phy(vaddr: usize) -> Option<PhyAddr> {
     virt2pte(vaddr).map(|(pte, offset)| PhyAddr(((pte as usize) & 0x7FFFFFF000) + offset))
 }
 
-/// Gnarly code ahead
 pub unsafe fn vmap(vaddr: usize, paddr: PhyAddr, attrs: u64) -> Result<(), ()> {
     // TODO: Only supports ttbr0 for now
+    vmap_to(&mut PAGING.user_l1, vaddr, paddr, attrs)
+}
+
+/// Gnarly code ahead
+pub unsafe fn vmap_to(
+    page_table: &mut PageTable,
+    vaddr: usize,
+    paddr: PhyAddr,
+    attrs: u64,
+) -> Result<(), ()> {
     // TODO: Doesn't ever free lvl2,3 tables if empty
     if vaddr % (PAGE_SIZE as usize) != 0 {
         return Err(());
@@ -317,32 +326,32 @@ pub unsafe fn vmap(vaddr: usize, paddr: PhyAddr, attrs: u64) -> Result<(), ()> {
 
     const TABLE_FLAGS: u64 = PT_PAGE | // it has the "Present" flag, which must be set, and we have area in it mapped by pages
             PT_AF | // accessed flag. Without this we're going to have a Data Abort exception
-            PT_USER | // non-privileged
             PT_ISH | // inner shareable
             PT_MEM; // normal memory
 
     // Look for lvl1 entry
-    let lvl2 = PAGING.user_l1.0[vaddr >> 30];
+    let lvl2 = page_table.0[vaddr >> 30];
     if lvl2 == 0 {
         // Create new lvl2 table
         let new_table = Box::new(PageTable::new());
-        PAGING.user_l1.0[vaddr >> 30] =
-            Box::leak(new_table) as *mut PageTable as usize as u64 | TABLE_FLAGS;
+        page_table.0[vaddr >> 30] =
+            (Box::leak(new_table) as *mut PageTable as usize as u64 & 0x7FFFFFFFFF) | TABLE_FLAGS;
         println!(
             "[DBUG] VMAP: Allocated new lvl2 page table: 0x{:x}",
-            PAGING.user_l1.0[vaddr >> 30]
+            page_table.0[vaddr >> 30]
         );
     }
 
     // lvl2 table exists now
-    PAGING.user_l1.use_child_mut(vaddr >> 30, |lvl2| {
+    page_table.use_child_mut(vaddr >> 30, |lvl2| {
         if let Some((_, lvl2)) = lvl2 {
             let lvl3 = lvl2.0[(vaddr >> 21) % 512];
             if lvl3 == 0 {
                 // Create new lvl3 table
                 let new_table = Box::new(PageTable::new());
                 lvl2.0[(vaddr >> 21) % 512] =
-                    Box::leak(new_table) as *mut PageTable as usize as u64 | TABLE_FLAGS;
+                    (Box::leak(new_table) as *mut PageTable as usize as u64 & 0x7FFFFFFFFF)
+                        | TABLE_FLAGS;
                 println!(
                     "[DBUG] VMAP: Allocated new lvl3 page table: 0x{:x}",
                     lvl2.0[(vaddr >> 21) % 512]

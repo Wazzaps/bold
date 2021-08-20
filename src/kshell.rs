@@ -1,8 +1,9 @@
 #![allow(clippy::never_loop)]
-use crate::framebuffer_console;
+use crate::arch::aarch64::mmio::sleep_us;
 use crate::ktask;
 use crate::prelude::*;
 use crate::{fonts, ipc};
+use crate::{framebuffer_console, syscalls};
 use futures::future::BoxFuture;
 use futures::stream;
 use futures::StreamExt;
@@ -271,6 +272,7 @@ impl KShell {
                              cd <PATH>   : Change directory\n\
                              info        : Display system info\n\
                              ps          : Process list\n\
+                             init        : Start usermode\n\
                              font <FONT> : Change framebuffer font"
                         );
                     }
@@ -280,6 +282,7 @@ impl KShell {
                     b"font" => self.handle_cmd_font(&words).await,
                     b"info" => self.handle_cmd_info(&words).await,
                     b"ps" => self.handle_cmd_ps(&words).await,
+                    b"init" => self.handle_cmd_init(&words).await,
                     _ => {
                         queue_writeln!(
                             self.output.clone(),
@@ -452,6 +455,12 @@ impl KShell {
                 AsciiStr(task.name),
             );
         }
+    }
+
+    async fn handle_cmd_init(&mut self, _words: &[&[u8]]) {
+        queue_writeln!(self.output.clone(), "Starting usermode...");
+        sleep_us(100000).await;
+        syscalls::usermode().await;
     }
 }
 

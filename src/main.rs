@@ -36,16 +36,6 @@ use crate::prelude::*;
 use core::ptr::slice_from_raw_parts;
 pub(crate) use file_interface as fi;
 
-#[inline(always)]
-unsafe fn syscall1(num: usize, mut arg1: usize) -> usize {
-    asm!(
-        "svc #0",
-        in("x8") num,
-        inout("x0") arg1,
-    );
-    arg1
-}
-
 /// # Safety
 ///
 /// This function assumes it runs only once, on a clean machine
@@ -58,11 +48,17 @@ pub unsafe extern "C" fn kmain(dtb_addr: PhyAddr) -> ! {
     mmu::init().unwrap();
 
     let real_kmain_addr = PhyAddr(kmain_mmu as *const () as usize).virt();
-    // let real_kmain_addr = kmain_mmu as *const () as usize;
     let real_kmain_addr: unsafe extern "C" fn(PhyAddr) -> ! = core::mem::transmute(real_kmain_addr);
     (real_kmain_addr)(dtb_addr)
 }
 
+/// # Safety
+///
+/// This function assumes:
+/// - It runs only once, on a clean machine
+/// - `dtb_addr` is either a valid dtb or null
+/// - The MMU is initialized with both low-half and high-half pointing to kernel memory
+///
 /// Don't do complex things (e.g like printing) that might leave lowmem pointers dangling
 #[no_mangle]
 pub unsafe extern "C" fn kmain_mmu(dtb_addr: PhyAddr) -> ! {
@@ -91,6 +87,13 @@ pub unsafe extern "C" fn kmain_mmu(dtb_addr: PhyAddr) -> ! {
     )
 }
 
+/// # Safety
+///
+/// This function assumes:
+/// - It runs only once, on a clean machine
+/// - `dtb_addr` is either a valid dtb or null
+/// - The MMU is initialized with both low-half and high-half pointing to kernel memory
+/// - The stack was changed to the main stack of the kinit thread
 #[no_mangle]
 unsafe extern "C" fn kmain_on_stack(dtb_addr: PhyAddr) -> ! {
     println!("[DBUG] Ejecting lowmem...");
@@ -165,7 +168,8 @@ unsafe extern "C" fn kmain_on_stack(dtb_addr: PhyAddr) -> ! {
     // // Map some page
     // const PAGE_FLAGS: u64 = mmu::PT_USER | // non-privileged
     //     mmu::PT_ISH | // inner shareable
-    //     mmu::PT_MEM; // normal memory;
+    //     mmu::PT_MEM | // normal memory;
+    //     mmu::PT_KERNEL; // kernel memory;
     // mmu::vmap(0x40000000, PhyAddr(0x80000), PAGE_FLAGS).unwrap();
     // println!(
     //     "[DBUG] Accessing kernel code at {:?} via mapping at 0x{:x}",
@@ -310,7 +314,6 @@ unsafe extern "C" fn kmain_on_stack(dtb_addr: PhyAddr) -> ! {
         );
     });
 
-    spawn_task!(b"Usermode Task", { syscalls::usermode().await });
     ktask::run();
 
     println!("[Done]");

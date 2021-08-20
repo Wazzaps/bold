@@ -78,8 +78,8 @@ Mix of:
 - [x] Higher-half kernel
 - [ ] Make use of DTB
 - [ ] Parse tar initrd
-- [ ] Run code in EL0 (usermode)
-- [ ] Paging for usermode
+- [x] Run code in EL0 (usermode)
+- [x] Paging for usermode
 - [ ] FAT32 driver
 - [x] IPC layer (basic)
 - [ ] VFS layer?

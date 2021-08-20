@@ -15,7 +15,14 @@ static inline long __syscall1(long syscall_no, unsigned long arg1) {
 
 #define SYS_EXIT 0
 #define SYS_KLOG_WRITE 1
+#define SYS_KLOG_WRITE_INT 2
+
 
 void _start() {
-    __syscall1(SYS_KLOG_WRITE, (unsigned long) "Hello from usermode!");
+    __syscall1(SYS_KLOG_WRITE, (unsigned long) "Hello from usermode! &start =");
+    __syscall1(SYS_KLOG_WRITE_INT, (unsigned long) &_start);
+    __syscall1(SYS_KLOG_WRITE, (unsigned long) "Bye!");
+//    __syscall1(SYS_KLOG_WRITE, (unsigned long) "Trying to read kernel memory:");
+//    __syscall1(SYS_KLOG_WRITE_INT, *(unsigned long*) 0xffffff8000080000);
+    __syscall1(SYS_EXIT, (unsigned long) 0);
 }

@@ -35,7 +35,7 @@ pub unsafe fn exception_handler2(e: &mut ExceptionContext) {
             Err(_) => {
                 // Unknown syscall, return error
                 println!("[WARN] Called unknown syscall 0x{:x}", e.gpr[0]);
-                e.gpr[0] = 0xffffffffffffffff;
+                e.gpr[0] = u64::MAX;
             }
         }
         return;
