@@ -83,7 +83,6 @@ struct ConsoleState {
     pub last_text_buf: [u8; 80 * 30],
     pub cursor: u32,
     pub font: &'static [u8],
-    pub last_font: &'static [u8],
 }
 
 lazy_static! {
@@ -92,12 +91,12 @@ lazy_static! {
         last_text_buf: [b' '; 80 * 30],
         cursor: 0,
         font: fonts::TERMINUS.get(),
-        last_font: fonts::TERMINUS.get(),
     });
     static ref RENDER_WAKER: Signal = Signal::new();
 }
 
-static FRAMEBUFFER_DIRTY: AtomicBool = AtomicBool::new(true);
+pub static FRAMEBUFFER_DIRTY: AtomicBool = AtomicBool::new(true);
+pub static FRAMEBUFFER_ALL_DIRTY: AtomicBool = AtomicBool::new(true);
 
 async fn yield_lock<T>(lock: &Mutex<T>) -> MutexGuard<'_, T> {
     loop {
@@ -112,10 +111,15 @@ async fn yield_lock<T>(lock: &Mutex<T>) -> MutexGuard<'_, T> {
     }
 }
 
-pub async fn set_font(font: &'static [u8]) {
-    yield_lock(&STATE).await.font = font;
+pub fn redraw() {
+    FRAMEBUFFER_ALL_DIRTY.store(true, Ordering::SeqCst);
     FRAMEBUFFER_DIRTY.store(true, Ordering::SeqCst);
     RENDER_WAKER.notify_all();
+}
+
+pub async fn set_font(font: &'static [u8]) {
+    yield_lock(&STATE).await.font = font;
+    redraw();
 }
 
 fn scroll_buffer(state: &mut ConsoleState) {
@@ -301,6 +305,7 @@ pub fn init() {
             .unwrap();
         loop {
             vsync(async || {
+                let all_dirty = FRAMEBUFFER_ALL_DIRTY.swap(false, Ordering::SeqCst);
                 for row in 0..30 {
                     let mut modified = false;
                     for col in 0..80 {
@@ -308,8 +313,9 @@ pub fn init() {
                             let mut state = yield_lock(&STATE).await;
                             let font = state.font;
 
-                            if state.text_buf[row * 80 + col] != state.last_text_buf[row * 80 + col]
-                                || state.font.as_ptr() != state.last_font.as_ptr()
+                            if all_dirty
+                                || state.text_buf[row * 80 + col]
+                                    != state.last_text_buf[row * 80 + col]
                             {
                                 framebuffer
                                     .call(framebuffer::FramebufferCM::DrawChar {
@@ -329,11 +335,6 @@ pub fn init() {
                     if modified {
                         yield_now().await;
                     }
-                }
-
-                let mut state = yield_lock(&STATE).await;
-                if state.font.as_ptr() != state.last_font.as_ptr() {
-                    state.last_font = state.font;
                 }
 
                 true

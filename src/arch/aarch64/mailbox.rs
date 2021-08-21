@@ -67,7 +67,10 @@ pub unsafe fn call_raw(dst: *mut u8) {
 }
 
 // FIXME: HACK
-pub(crate) unsafe fn _send_fb_property_tags() -> Result<FramebufferInfo, ()> {
+pub(crate) unsafe fn _send_fb_property_tags(
+    width: u32,
+    height: u32,
+) -> Result<FramebufferInfo, ()> {
     // Get reference to mailbox in device memory
     let _lock = MAILBOX_LOCK.lock();
     let mut mailbox = &mut MAILBOX_MSG;
@@ -79,13 +82,13 @@ pub(crate) unsafe fn _send_fb_property_tags() -> Result<FramebufferInfo, ()> {
     mailbox.rest[0] = 0x48003;
     mailbox.rest[1] = 8;
     mailbox.rest[2] = 8;
-    mailbox.rest[3] = 640;
-    mailbox.rest[4] = 480;
+    mailbox.rest[3] = width;
+    mailbox.rest[4] = height;
     mailbox.rest[5] = 0x48004;
     mailbox.rest[6] = 8;
     mailbox.rest[7] = 8;
-    mailbox.rest[8] = 640;
-    mailbox.rest[9] = 480;
+    mailbox.rest[8] = width;
+    mailbox.rest[9] = height;
     mailbox.rest[10] = 0x48009;
     mailbox.rest[11] = 8;
     mailbox.rest[12] = 8;

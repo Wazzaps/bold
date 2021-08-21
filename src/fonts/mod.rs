@@ -37,7 +37,7 @@ impl Font {
                 if ((*byte >> bit) & 1u8) != 0u8 {
                     uncompressed.extend_from_slice(&[255, 255, 255, 255]);
                 } else {
-                    uncompressed.extend_from_slice(&[0, 0, 0, 255]);
+                    uncompressed.extend_from_slice(&[23, 22, 18, 255]);
                 }
             }
         }

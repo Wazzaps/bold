@@ -3,6 +3,7 @@
 #![feature(panic_info_message)]
 #![feature(default_alloc_error_handler)]
 #![feature(async_closure)]
+#![feature(optimize_attribute)]
 #![no_builtins]
 #![no_std]
 #![no_main]

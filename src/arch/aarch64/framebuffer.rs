@@ -46,7 +46,7 @@ impl driver_manager::Driver for Driver {
         unsafe {
             println!("Getting framebuffer");
 
-            let fb_info = _send_fb_property_tags()?;
+            let fb_info = _send_fb_property_tags(FB_WIDTH, FB_HEIGHT)?;
             println!("{:?}", fb_info);
             let slice = PhySlice {
                 base: PhyAddr(fb_info.pointer as usize),
@@ -140,6 +140,118 @@ fn draw_char(fb: *mut u8, pitch: u32, font: &'static [u8], char: u8, row: usize,
     }
 }
 
+static SWAP_BUF: Mutex<[u8; (4 * FB_WIDTH * FB_HEIGHT) as usize]> =
+    Mutex::new([0; (4 * FB_WIDTH * FB_HEIGHT) as usize]);
+
+#[inline(never)]
+#[optimize(speed)]
+unsafe fn memzero(dst: *mut u64, len: usize) {
+    let val = 0;
+
+    if len % 32 == 0 {
+        for i in 0..(len / 32) {
+            *dst.add(i * 32) = val;
+            *dst.add((i * 32) + 1) = val;
+            *dst.add((i * 32) + 2) = val;
+            *dst.add((i * 32) + 3) = val;
+            *dst.add((i * 32) + 4) = val;
+            *dst.add((i * 32) + 5) = val;
+            *dst.add((i * 32) + 6) = val;
+            *dst.add((i * 32) + 7) = val;
+            *dst.add((i * 32) + 8) = val;
+            *dst.add((i * 32) + 9) = val;
+            *dst.add((i * 32) + 10) = val;
+            *dst.add((i * 32) + 11) = val;
+            *dst.add((i * 32) + 12) = val;
+            *dst.add((i * 32) + 13) = val;
+            *dst.add((i * 32) + 14) = val;
+            *dst.add((i * 32) + 15) = val;
+            *dst.add((i * 32) + 16) = val;
+            *dst.add((i * 32) + 17) = val;
+            *dst.add((i * 32) + 18) = val;
+            *dst.add((i * 32) + 19) = val;
+            *dst.add((i * 32) + 20) = val;
+            *dst.add((i * 32) + 21) = val;
+            *dst.add((i * 32) + 22) = val;
+            *dst.add((i * 32) + 23) = val;
+            *dst.add((i * 32) + 24) = val;
+            *dst.add((i * 32) + 25) = val;
+            *dst.add((i * 32) + 26) = val;
+            *dst.add((i * 32) + 27) = val;
+            *dst.add((i * 32) + 28) = val;
+            *dst.add((i * 32) + 29) = val;
+            *dst.add((i * 32) + 30) = val;
+            *dst.add((i * 32) + 31) = val;
+        }
+    } else {
+        for i in 0..len {
+            *dst.add(i) = val;
+        }
+    }
+}
+
+#[inline(never)]
+#[optimize(speed)]
+unsafe fn memset(dst: *mut u64, val: u8, len: usize) {
+    let val = val as u64;
+    let val = val
+        | (val << 8)
+        | (val << 16)
+        | (val << 24)
+        | (val << 32)
+        | (val << 40)
+        | (val << 48)
+        | (val << 56);
+
+    if len % 32 == 0 {
+        for i in 0..(len / 32) {
+            *dst.add(i * 32) = val;
+            *dst.add((i * 32) + 1) = val;
+            *dst.add((i * 32) + 2) = val;
+            *dst.add((i * 32) + 3) = val;
+            *dst.add((i * 32) + 4) = val;
+            *dst.add((i * 32) + 5) = val;
+            *dst.add((i * 32) + 6) = val;
+            *dst.add((i * 32) + 7) = val;
+            *dst.add((i * 32) + 8) = val;
+            *dst.add((i * 32) + 9) = val;
+            *dst.add((i * 32) + 10) = val;
+            *dst.add((i * 32) + 11) = val;
+            *dst.add((i * 32) + 12) = val;
+            *dst.add((i * 32) + 13) = val;
+            *dst.add((i * 32) + 14) = val;
+            *dst.add((i * 32) + 15) = val;
+            *dst.add((i * 32) + 16) = val;
+            *dst.add((i * 32) + 17) = val;
+            *dst.add((i * 32) + 18) = val;
+            *dst.add((i * 32) + 19) = val;
+            *dst.add((i * 32) + 20) = val;
+            *dst.add((i * 32) + 21) = val;
+            *dst.add((i * 32) + 22) = val;
+            *dst.add((i * 32) + 23) = val;
+            *dst.add((i * 32) + 24) = val;
+            *dst.add((i * 32) + 25) = val;
+            *dst.add((i * 32) + 26) = val;
+            *dst.add((i * 32) + 27) = val;
+            *dst.add((i * 32) + 28) = val;
+            *dst.add((i * 32) + 29) = val;
+            *dst.add((i * 32) + 30) = val;
+            *dst.add((i * 32) + 31) = val;
+        }
+    } else {
+        for i in 0..len {
+            *dst.add(i) = val;
+        }
+    }
+}
+
+#[inline(never)]
+unsafe fn memcpy(dst: *mut u64, src: *const u64, len: usize) {
+    for i in 0..len {
+        *dst.add(i) = *src.add(i);
+    }
+}
+
 #[async_trait]
 impl fi::Control for Device {
     async fn call(&self, msg: FramebufferCM) -> IoResult<()> {
@@ -176,6 +288,98 @@ impl fi::Control for Device {
                     let pitch = fb_info.pitch;
 
                     draw_char(fb, pitch, font, char, row, col);
+                }
+            }
+            FramebufferCM::Clear { color } => {
+                let fb_info = unsafe { DRIVER.fb_info.lock() };
+                if fb_info.pointer != 0 {
+                    let fb = unsafe { PhyAddr(fb_info.pointer as usize).virt_mut() as *mut u8 };
+
+                    unsafe {
+                        // let mut swap_fb = SWAP_BUF.lock();
+                        // memset(
+                        //     swap_fb.as_ptr() as *mut u64,
+                        //     color as u8,
+                        //     (fb_info.size / 8) as usize,
+                        // );
+                        // memcpy(
+                        //     fb,
+                        //     swap_fb.as_ptr() as *const u64,
+                        //     (fb_info.size / 8) as usize,
+                        // );
+
+                        // Clear screen
+                        if (color % 1024) == 0 {
+                            memzero(fb as *mut u64, (fb_info.size / 8) as usize);
+                        } else {
+                            // Draw rectangle
+                            // let pos_x: isize = (color as isize * 36123 ^ color as isize * 26123) % 540;
+                            // let pos_y: isize = (color as isize * 52123 ^ color as isize * 7123) % 380;
+                            // let color_r: u8 = (color as isize * 20123 ^ color as isize * 12123) as u8;
+                            // let color_g: u8 = (color as isize * 19123 ^ color as isize * 11123) as u8;
+                            // let color_b: u8 = (color as isize * 18123 ^ color as isize * 10123) as u8;
+                            // for y in 0..100 {
+                            //     for x in 0..100 {
+                            //         *fb.offset(
+                            //             (x + pos_x) * 4 + (pos_y + y) * fb_info.pitch as isize,
+                            //         ) = color_r;
+                            //         *fb.offset(
+                            //             1 + (x + pos_x) * 4 + (pos_y + y) * fb_info.pitch as isize,
+                            //         ) = color_g;
+                            //         *fb.offset(
+                            //             2 + (x + pos_x) * 4 + (pos_y + y) * fb_info.pitch as isize,
+                            //         ) = color_b;
+                            //     }
+                            //     // memset(
+                            //     //     fb.offset(pos_x * 4 + (pos_y + y) * fb_info.pitch as isize)
+                            //     //         as *mut u64,
+                            //     //     color,
+                            //     //     100 * 4 / 8,
+                            //     // );
+                            // }
+
+                            // Draw circle
+                            let size: isize =
+                                ((color as isize * 325) ^ (color as isize * 503)) % 30;
+                            let pos_x: isize = ((color as isize * 361) ^ (color as isize * 261))
+                                % (fb_info.virt_width as isize - size);
+                            let pos_y: isize = ((color as isize * 521) ^ (color as isize * 712))
+                                % (fb_info.virt_height as isize - size);
+                            let color_r: u8 =
+                                ((color as isize * 201) ^ (color as isize * 121)) as u8;
+                            let color_g: u8 =
+                                ((color as isize * 191) ^ (color as isize * 111)) as u8;
+                            let color_b: u8 =
+                                ((color as isize * 181) ^ (color as isize * 10123)) as u8;
+                            let gw = fb_info.virt_width.min(fb_info.virt_height) as isize - 50;
+                            let gw2 = fb_info.virt_width.min(fb_info.virt_height) as isize - 300;
+                            for y in 0..size {
+                                for x in 0..size {
+                                    let rx = x - size / 2;
+                                    let ry = y - size / 2;
+                                    let gx = (pos_x + x) - (fb_info.virt_width as isize) / 2;
+                                    let gy = (pos_y + y) - (fb_info.virt_height as isize) / 2;
+                                    if (rx * rx + ry * ry) <= (size / 2) * (size / 2)
+                                        && ((gx * gx + gy * gy) <= (gw / 2) * (gw / 2)
+                                            && (gx * gx + gy * gy) >= (gw2 / 2) * (gw2 / 2))
+                                            != ((gx > 0) != (gy > 0))
+                                    {
+                                        *fb.offset(
+                                            (x + pos_x) * 4 + (pos_y + y) * fb_info.pitch as isize,
+                                        ) = color_r;
+                                        *fb.offset(
+                                            1 + (x + pos_x) * 4
+                                                + (pos_y + y) * fb_info.pitch as isize,
+                                        ) = color_g + 30;
+                                        *fb.offset(
+                                            2 + (x + pos_x) * 4
+                                                + (pos_y + y) * fb_info.pitch as isize,
+                                        ) = color_b + 80;
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

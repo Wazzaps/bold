@@ -1,9 +1,12 @@
 #![allow(clippy::never_loop)]
+use crate::arch::aarch64::mmio::get_uptime_us;
 use crate::arch::aarch64::mmio::sleep_us;
+use crate::driver_manager::DeviceType;
+use crate::framebuffer::FramebufferCM;
 use crate::ktask;
 use crate::prelude::*;
+use crate::{driver_manager, framebuffer_console, syscalls};
 use crate::{fonts, ipc};
-use crate::{framebuffer_console, syscalls};
 use futures::future::BoxFuture;
 use futures::stream;
 use futures::StreamExt;
@@ -273,6 +276,7 @@ impl KShell {
                              info        : Display system info\n\
                              ps          : Process list\n\
                              init        : Start usermode\n\
+                             gfx         : Benchmark graphics\n\
                              font <FONT> : Change framebuffer font"
                         );
                     }
@@ -283,6 +287,7 @@ impl KShell {
                     b"info" => self.handle_cmd_info(&words).await,
                     b"ps" => self.handle_cmd_ps(&words).await,
                     b"init" => self.handle_cmd_init(&words).await,
+                    b"gfx" => self.handle_cmd_gfx(&words).await,
                     _ => {
                         queue_writeln!(
                             self.output.clone(),
@@ -436,6 +441,37 @@ impl KShell {
             self.output.clone(),
             "Scheduler:\n  {:?}",
             ktask::perf_report()
+        );
+    }
+
+    async fn handle_cmd_gfx(&mut self, _words: &[&[u8]]) {
+        let framebuffer = driver_manager::device_by_type(DeviceType::Framebuffer)
+            .unwrap()
+            .ctrl
+            .unwrap();
+        let start_time = get_uptime_us();
+        let iterations = 20000;
+        for i in 0..iterations {
+            framebuffer
+                .call(FramebufferCM::Clear { color: i })
+                .await
+                .unwrap();
+            yield_now().await;
+        }
+        let end_time = get_uptime_us();
+        framebuffer_console::redraw();
+        queue_writeln!(
+            self.output.clone(),
+            "{} clears in {} ms",
+            iterations,
+            (end_time - start_time) / 1000
+        );
+        queue_writeln!(
+            self.output.clone(),
+            "= {} fps",
+            (iterations as u64 * 1000 * 1000)
+                .checked_div(end_time - start_time)
+                .unwrap_or(0)
         );
     }
 

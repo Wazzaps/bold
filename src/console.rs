@@ -1,9 +1,9 @@
-use crate::arch::aarch64::uart1::write_uart1;
 use crate::driver_manager::{drivers, DeviceType};
 use crate::fi;
 use crate::ipc;
 use crate::prelude::*;
 
+use crate::arch::aarch64::uart1::write_uart1;
 use alloc::string::ToString;
 use core::fmt;
 use core::fmt::Formatter;
