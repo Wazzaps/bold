@@ -4,6 +4,7 @@
 #![feature(default_alloc_error_handler)]
 #![feature(async_closure)]
 #![feature(optimize_attribute)]
+#![feature(alloc_error_handler)]
 #![no_builtins]
 #![no_std]
 #![no_main]
@@ -29,6 +30,7 @@ mod lang_items;
 pub(crate) mod prelude;
 pub(crate) mod sleep_queue;
 pub(crate) mod syscalls;
+pub(crate) mod threads;
 pub(crate) mod utils;
 
 use crate::arch::aarch64::uart1::init_uart1;
@@ -143,7 +145,6 @@ unsafe extern "C" fn kmain_on_stack(dtb_addr: PhyAddr) -> ! {
     driver_manager::init_driver_by_name(b"Raspberry Pi 3 UART1").warn();
     println!("--- Bold Kernel v{} ---", env!("CARGO_PKG_VERSION"));
 
-    arch::aarch64::interrupts::init();
     arch::aarch64::init::init_multicore();
 
     // // IPC test
@@ -315,11 +316,11 @@ unsafe extern "C" fn kmain_on_stack(dtb_addr: PhyAddr) -> ! {
         );
     });
 
-    ktask::run();
+    threads::init();
+    arch::aarch64::interrupts::init();
+    // Now waiting for timer calibration interrupt to begin the scheduler
 
-    println!("[Done]");
     loop {
         asm!("wfi");
     }
-    // qemu_exit::AArch64::new().exit(0);
 }

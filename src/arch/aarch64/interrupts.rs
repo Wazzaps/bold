@@ -3,8 +3,10 @@ use crate::arch::aarch64::mmio::{
     get_uptime_us, mmio_read, mmio_write, ENABLE_IRQS_1, ENABLE_IRQS_2, IRQ_PENDING_1,
     SYSTEM_TIMER_IRQ_1, TIMER_C1, TIMER_CLO, TIMER_CS, TIMER_CS_M1, UART_IRQ,
 };
+use crate::ktask::null_waker;
 use crate::prelude::*;
-use crate::sleep_queue;
+use crate::threads::current_core;
+use crate::{sleep_queue, threads};
 use core::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use core::task::Waker;
 use cortex_a::registers::DAIF;
@@ -51,6 +53,7 @@ pub unsafe fn init() {
     // Time Calibration Setup
     let uptime_now = get_uptime_us();
     let timer_now = mmio_read(TIMER_CLO);
+    println!("[INFO] Calibrating timer...");
     println!("[DBUG] Start ticks={} uptime={}", timer_now, uptime_now);
     CALIBRATION_START_TICKS.store(timer_now, Ordering::SeqCst);
     CALIBRATION_START_UPTIME_US.store(uptime_now, Ordering::SeqCst);
@@ -107,22 +110,7 @@ fn calc_timer_factor(
     Ok(timer_factor as u32)
 }
 
-#[allow(dead_code, unused_variables)]
-unsafe fn print_stacktrace(e: &mut ExceptionContext) {
-    println!("@@@@");
-    let sp = get_msr!(sp_el0);
-    println!("- PC: 0x{:x} ", e.elr_el1);
-    println!("- LR: 0x{:x} ", e.lr);
-    for i in 0..128 {
-        let val = *(sp as *const u64).offset(i);
-        if (0x80000..=0x80000 + 0x3f400).contains(&val) {
-            println!("- {}: 0x{:x} ", i, val);
-        }
-    }
-    println!("@@@@");
-}
-
-unsafe fn handle_timer(_e: &mut ExceptionContext) {
+unsafe fn handle_timer(e: &mut ExceptionContext) {
     let timer_factor = TIMER_FACTOR.load(Ordering::SeqCst);
     if timer_factor == 0 {
         let calibration_end_ticks = mmio_read(TIMER_CLO);
@@ -150,6 +138,25 @@ unsafe fn handle_timer(_e: &mut ExceptionContext) {
                 });
         println!("[INFO] Timer Factor: {} / {}", timer_factor, 1 << 16);
         TIMER_FACTOR.store(timer_factor, Ordering::SeqCst);
+    }
+
+    let current_core = current_core();
+    if current_core >= threads::CORE_COUNT {
+        panic!("Got interrupt on unknown core #{}", current_core);
+    }
+
+    let executor = &threads::EXECUTORS.get().unwrap()[current_core];
+
+    // Context switch if needed
+    if executor.did_timeout() {
+        let last_tid = executor.switch(e);
+        if last_tid != 0 {
+            executor.wake(last_tid);
+        }
+        sleep_queue::push(
+            get_uptime_us() + threads::THREAD_TIMEOUT_US as u64,
+            null_waker(),
+        );
     }
 
     // Wake last event

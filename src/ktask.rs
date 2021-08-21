@@ -1,6 +1,8 @@
 use crate::arch::aarch64::mmio::get_uptime_us;
 use crate::prelude::*;
 
+use crate::threads;
+use core::ptr::null;
 use core::sync::atomic::{AtomicUsize, Ordering};
 use core::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 use core::{future::Future, pin::Pin};
@@ -135,7 +137,7 @@ impl SimpleExecutor {
                 i
             };
             if let Some(task_id) = next_task {
-                let waker = run_queue_waker(task_id);
+                let waker = task_waker(task_id);
                 let mut context = Context::from_waker(&waker);
 
                 let found_task;
@@ -196,6 +198,8 @@ impl SimpleExecutor {
                     // Run queue was updated! continue...
                     continue;
                 }
+
+                // TODO: replace with `yield_thread`
                 unsafe { asm!("wfi") };
             }
         }
@@ -228,10 +232,10 @@ impl SimpleExecutor {
     }
 }
 
-fn run_queue_raw_waker(task_id: usize) -> RawWaker {
+fn task_raw_waker(task_id: usize) -> RawWaker {
     fn no_op(_: *const ()) {}
     fn clone(task_id: *const ()) -> RawWaker {
-        run_queue_raw_waker(task_id as usize)
+        task_raw_waker(task_id as usize)
     }
     fn wake(task_id: *const ()) {
         let _locked = irq_lock();
@@ -239,16 +243,51 @@ fn run_queue_raw_waker(task_id: usize) -> RawWaker {
     }
     fn wake_by_ref(task_id: *const ()) {
         let _locked = irq_lock();
-        let exec = EXECUTOR.wait();
-        exec.run_queue.lock().push_back(task_id as usize);
+        EXECUTOR.wait().run_queue.lock().push_back(task_id as usize);
     }
 
     let vtable = &RawWakerVTable::new(clone, wake, wake_by_ref, no_op);
     RawWaker::new(task_id as *const (), vtable)
 }
 
-fn run_queue_waker(task_id: usize) -> Waker {
-    unsafe { Waker::from_raw(run_queue_raw_waker(task_id)) }
+pub fn task_waker(task_id: usize) -> Waker {
+    unsafe { Waker::from_raw(task_raw_waker(task_id)) }
+}
+
+fn thread_raw_waker(thread_id: usize) -> RawWaker {
+    fn no_op(_: *const ()) {}
+    fn clone(thread_id: *const ()) -> RawWaker {
+        thread_raw_waker(thread_id as usize)
+    }
+    fn wake(thread_id: *const ()) {
+        let _locked = irq_lock();
+        threads::EXECUTORS.get().unwrap()[0].wake(thread_id as usize);
+    }
+    fn wake_by_ref(thread_id: *const ()) {
+        let _locked = irq_lock();
+        threads::EXECUTORS.get().unwrap()[0].wake(thread_id as usize);
+    }
+
+    let vtable = &RawWakerVTable::new(clone, wake, wake_by_ref, no_op);
+    RawWaker::new(thread_id as *const (), vtable)
+}
+
+pub fn thread_waker(thread_id: usize) -> Waker {
+    unsafe { Waker::from_raw(thread_raw_waker(thread_id)) }
+}
+
+fn null_raw_waker() -> RawWaker {
+    fn no_op(_: *const ()) {}
+    fn clone(_: *const ()) -> RawWaker {
+        null_raw_waker()
+    }
+
+    let vtable = &RawWakerVTable::new(clone, no_op, no_op, no_op);
+    RawWaker::new(null(), vtable)
+}
+
+pub fn null_waker() -> Waker {
+    unsafe { Waker::from_raw(null_raw_waker()) }
 }
 
 #[inline]

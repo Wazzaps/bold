@@ -1,12 +1,14 @@
 use crate::arch::aarch64::exceptions::ExceptionContext;
+use crate::arch::aarch64::mmio::get_uptime_us;
 use crate::arch::aarch64::mmu;
 use crate::arch::aarch64::mmu::PageTable;
+use crate::ktask::thread_waker;
 use crate::prelude::*;
+use crate::threads::{current_core, Thread};
+use crate::{sleep_queue, threads};
 use core::ops::Deref;
-use core::pin::Pin;
 use core::ptr::slice_from_raw_parts;
 use num_enum::TryFromPrimitive;
-use spin::Mutex;
 
 #[repr(u64)]
 #[derive(TryFromPrimitive)]
@@ -14,7 +16,8 @@ pub enum Syscall {
     Exit = 0,
     KLogWrite = 1,
     KLogWriteInt = 2,
-    EnterUsermode = 0xffff,
+    USleep = 3,
+    GetTid = 4,
 }
 
 unsafe fn cstr_ptr_to_asciistr(ptr: *const u8) -> AsciiStr<'static> {
@@ -33,45 +36,40 @@ unsafe fn cstr_ptr_to_asciistr(ptr: *const u8) -> AsciiStr<'static> {
 pub unsafe fn handle_syscall(e: &mut ExceptionContext, syscall_no: Syscall) {
     match syscall_no {
         Syscall::Exit => {
-            panic!("Init process tried to exit!")
+            let current_core = current_core();
+            let executor = &threads::EXECUTORS.get().unwrap()[current_core];
+            let current_thread = executor.current_thread().unwrap();
+            current_thread.read().kill();
+            executor.switch(e);
         }
         Syscall::KLogWrite => {
-            let format = cstr_ptr_to_asciistr(e.gpr[1] as *const u8);
+            let format = cstr_ptr_to_asciistr(e.gpr[0] as *const u8);
             println!("[UM] {}", format);
         }
         Syscall::KLogWriteInt => {
-            println!("[UM] 0x{:x}", e.gpr[1]);
+            println!("[UM] 0x{:x}", e.gpr[0]);
         }
-        Syscall::EnterUsermode => {
-            e.elr_el1 = e.gpr[1];
-            e.gpr[0] = 0;
-            e.gpr[1] = 0;
-            e.spsr_el1 = 0x340;
+        Syscall::USleep => {
+            let sleep_time = e.gpr[0];
+            let wake_time = get_uptime_us() + sleep_time.max(threads::THREAD_TIMEOUT_US as u64);
+
+            let current_core = current_core();
+            let executor = &threads::EXECUTORS.get().unwrap()[current_core];
+            let last_tid = executor.switch(e);
+            if last_tid != 0 {
+                sleep_queue::push(wake_time, thread_waker(last_tid));
+            }
+        }
+        Syscall::GetTid => {
+            let current_core = current_core();
+            let executor = &threads::EXECUTORS.get().unwrap()[current_core];
+            e.gpr[0] = executor.current_thread().unwrap().read().id() as u64;
         }
     }
 }
 
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub struct ThreadState {
-    /// General Purpose Registers.
-    pub gpr: [u64; 30],
-
-    /// The link register, aka x30.
-    pub lr: u64,
-
-    /// The program counter.
-    pub pc: u64,
-
-    /// The stack pointer.
-    pub sp: u64,
-
-    /// Saved program status.
-    pub spsr: u64,
-}
-
 #[repr(align(4096))]
-pub struct PageAligned<const LEN: usize>([u8; LEN]);
+pub struct PageAligned<const LEN: usize>(pub [u8; LEN]);
 
 impl<const LEN: usize> Deref for PageAligned<LEN> {
     type Target = [u8; LEN];
@@ -79,25 +77,6 @@ impl<const LEN: usize> Deref for PageAligned<LEN> {
     fn deref(&self) -> &Self::Target {
         &self.0
     }
-}
-
-pub struct Thread {
-    pub state: ThreadState,
-    pub page_tables: Pin<Box<PageTable>>,
-    pub stack: Pin<Box<PageAligned<{ 4096 * 8 }>>>,
-}
-
-pub static MAIN_THREAD: Mutex<Option<Thread>> = Mutex::new(None);
-
-#[inline(always)]
-unsafe fn enter_usermode() -> ! {
-    asm!(
-        "mov x0, 0xffff",
-        "mov x1, 0x20000",
-        "mov sp, 0x20000",
-        "svc #0",
-        options(noreturn)
-    )
 }
 
 pub async fn usermode() {
@@ -139,23 +118,20 @@ pub async fn usermode() {
         )
         .unwrap();
 
-        // Prepare thread state
-        {
-            *MAIN_THREAD.lock() = Some(Thread {
-                state: ThreadState {
-                    gpr: [
-                        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                        0, 0, 0, 0, 0,
-                    ],
-                    lr: 0,
-                    pc: 0x20000,
-                    sp: 0x20000,
-                    spsr: 0x340,
-                },
-                page_tables,
-                stack,
-            });
-        };
-        enter_usermode();
+        let thread = Thread::new(
+            b"Usermode Runner",
+            ExceptionContext {
+                gpr: [
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0,
+                ],
+                lr: 0,
+                pc: 0x20000,
+                sp: 0x20000,
+                spsr: 0x340,
+            },
+            Some(page_tables),
+        );
+        threads::EXECUTORS.get().unwrap()[0].spawn(thread);
     }
 }

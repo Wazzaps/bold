@@ -135,33 +135,33 @@ fn scroll_buffer(state: &mut ConsoleState) {
 }
 
 pub fn init() {
-    spawn_task!(b"FBCON.input", {
-        // Create the input queue
-        let root = ipc::ROOT.read().as_ref().unwrap().clone();
-        let _input_queue = root
-            .dir_get(ipc::well_known::ROOT_DEVICES)
-            .await
-            .unwrap()
-            .dir_get(ipc::well_known::DEVICES_RPI_FB_CON)
-            .await
-            .unwrap()
-            .dir_get(ipc::well_known::RPI_FB_CON0)
-            .await
-            .unwrap()
-            .dir_link(ipc::well_known::RPI_FB_CON_IN, ipc::IpcSpscQueue::new())
-            .await
-            .unwrap();
-
-        // Write to it forever
-        // TODO: Unimplemented until USB
-        // let mut buf = [0u8; 1];
-        // loop {
-        //     if let Ok(1) = fi::Read::read(&DEVICE, &mut buf).await {
-        //         input_queue.queue_write(&buf).warn();
-        //     }
-        //     yield_now().await;
-        // }
-    });
+    // TODO: Unimplemented until USB
+    // spawn_task!(b"FBCON.input", {
+    //     // Create the input queue
+    //     let root = ipc::ROOT.read().as_ref().unwrap().clone();
+    //     let _input_queue = root
+    //         .dir_get(ipc::well_known::ROOT_DEVICES)
+    //         .await
+    //         .unwrap()
+    //         .dir_get(ipc::well_known::DEVICES_RPI_FB_CON)
+    //         .await
+    //         .unwrap()
+    //         .dir_get(ipc::well_known::RPI_FB_CON0)
+    //         .await
+    //         .unwrap()
+    //         .dir_link(ipc::well_known::RPI_FB_CON_IN, ipc::IpcSpscQueue::new())
+    //         .await
+    //         .unwrap();
+    //
+    //     // Write to it forever
+    //     let mut buf = [0u8; 1];
+    //     loop {
+    //         if let Ok(1) = fi::Read::read(&DEVICE, &mut buf).await {
+    //             input_queue.queue_write(&buf).warn();
+    //         }
+    //         yield_now().await;
+    //     }
+    // });
 
     spawn_task!(b"FBCON.ttyemu", {
         // Create the output queue

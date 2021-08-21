@@ -22,7 +22,7 @@ macro_rules! set_msr {
             concat!("msr ", stringify!($name), ", {:x}"),
             in(reg) $value,
             options(nomem, nostack)
-        );
+        )
     };
 }
 
@@ -33,7 +33,7 @@ macro_rules! set_msr_const {
             concat!("msr ", stringify!($name), ", {}"),
             const $value,
             options(nomem, nostack)
-        );
+        )
     };
 }
 

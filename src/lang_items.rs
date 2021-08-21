@@ -29,6 +29,26 @@ unsafe fn panic_handler(info: &PanicInfo) -> ! {
     if let Some(location) = info.location() {
         println!("at {}", location);
     }
+    println!("--- Stack:");
+    let sp: u64;
+    let lr: u64;
+    asm!(
+        "mov {:x}, sp",
+        out(reg) sp,
+        options(nomem, nostack)
+    );
+    asm!(
+        "mov {:x}, lr",
+        out(reg) lr,
+        options(nomem, nostack)
+    );
+    println!("- LR: 0x{:x} ", lr);
+    for i in 0..128 {
+        let val = *(sp as *const u64).offset(i);
+        if (0xffffff8000080000..=0xffffff8000080000 + 0x03f400).contains(&val) {
+            println!("- {}: 0x{:x} ", i, val);
+        }
+    }
     println!("--- Bold Kernel v{} Panic! ---", env!("CARGO_PKG_VERSION"));
 
     let mut message_buf = ArrayVec::<u8, 512>::new();
@@ -46,4 +66,13 @@ unsafe fn panic_handler(info: &PanicInfo) -> ! {
     }
     // qemu_exit::AArch64::new().exit(1)
     // poweroff(false);
+}
+
+#[alloc_error_handler]
+pub fn oom(info: core::alloc::Layout) -> ! {
+    panic!(
+        "memory allocation of {} bytes failed [align={}]",
+        info.size(),
+        info.align()
+    )
 }
