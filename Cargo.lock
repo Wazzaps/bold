@@ -31,6 +31,7 @@ version = "0.1.0"
 dependencies = [
  "arrayvec",
  "async-trait",
+ "c2rust-bitfields",
  "cortex-a",
  "dtb",
  "futures",
@@ -41,6 +42,26 @@ dependencies = [
  "spin 0.9.2",
  "tar-parser",
  "tock-registers",
+]
+
+[[package]]
+name = "c2rust-bitfields"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eb34f0c0ace43530b2df7f18bc69ee0c4082158aa451ece29602f8c841e73764"
+dependencies = [
+ "c2rust-bitfields-derive",
+]
+
+[[package]]
+name = "c2rust-bitfields-derive"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3dd1601a7b828ab874d890e5a895563ca8ad485bdd3d2a359f148c8b72537241"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

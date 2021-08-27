@@ -13,7 +13,7 @@
 
 extern crate alloc;
 
-use crate::arch::aarch64::{mmu, phymem, virtmem};
+use crate::arch::aarch64::{entropy, mmu, phymem, virtmem};
 use alloc::boxed::Box;
 
 pub(crate) mod arch;
@@ -315,6 +315,8 @@ unsafe extern "C" fn kmain_on_stack(dtb_addr: PhyAddr) -> ! {
             false,
         );
     });
+
+    crate::arch::aarch64::usb::init();
 
     threads::init();
     arch::aarch64::interrupts::init();

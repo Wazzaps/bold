@@ -1,5 +1,5 @@
 use crate::arch::aarch64::exceptions::ExceptionContext;
-use crate::arch::aarch64::mmio::{delay_us_sync, get_uptime_us};
+use crate::arch::aarch64::mmio::get_uptime_us;
 use crate::arch::aarch64::mmu::PageTable;
 use crate::arch::aarch64::phymem;
 use crate::ktask;

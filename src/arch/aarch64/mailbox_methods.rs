@@ -4,6 +4,77 @@ use crate::prelude::*;
 use core::ops::Deref;
 use core::ptr::slice_from_raw_parts;
 
+pub const PWR_DEV_SD_CARD: u32 = 0;
+pub const PWR_DEV_UART0: u32 = 1;
+pub const PWR_DEV_UART1: u32 = 2;
+pub const PWR_DEV_USB_HCD: u32 = 3;
+pub const PWR_DEV_I2C0: u32 = 4;
+pub const PWR_DEV_I2C1: u32 = 5;
+pub const PWR_DEV_I2C2: u32 = 6;
+pub const PWR_DEV_SPI: u32 = 7;
+pub const PWR_DEV_CCP2TX: u32 = 8;
+
+pub fn get_power_state(device_id: u32) -> Result<u32, ()> {
+    #[repr(C)]
+    #[derive(Copy, Clone)]
+    pub struct GetPowerStateReq {
+        device_id: u32,
+    }
+
+    #[repr(C)]
+    #[derive(Copy, Clone)]
+    pub struct GetPowerStateRes {
+        device_id: u32,
+        state: u32,
+    }
+
+    let res: GetPowerStateRes =
+        unsafe { send_property_tag(0x00020001, GetPowerStateReq { device_id })? };
+
+    Ok(res.state)
+}
+
+pub fn get_power_timing(device_id: u32) -> Result<u32, ()> {
+    #[repr(C)]
+    #[derive(Copy, Clone)]
+    pub struct GetPowerTimingReq {
+        device_id: u32,
+    }
+
+    #[repr(C)]
+    #[derive(Copy, Clone)]
+    pub struct GetPowerTimingRes {
+        device_id: u32,
+        time_us: u32,
+    }
+
+    let res: GetPowerTimingRes =
+        unsafe { send_property_tag(0x00020002, GetPowerTimingReq { device_id })? };
+
+    Ok(res.time_us)
+}
+
+pub fn set_power_state(device_id: u32, state: u32) -> Result<u32, ()> {
+    #[repr(C)]
+    #[derive(Copy, Clone)]
+    pub struct SetPowerStateReq {
+        device_id: u32,
+        state: u32,
+    }
+
+    #[repr(C)]
+    #[derive(Copy, Clone)]
+    pub struct SetPowerStateRes {
+        device_id: u32,
+        state: u32,
+    }
+
+    let res: SetPowerStateRes =
+        unsafe { send_property_tag(0x00028001, SetPowerStateReq { device_id, state })? };
+
+    Ok(res.state)
+}
+
 pub fn get_clock_rate(clock_id: u32) -> Result<Freq, ()> {
     #[repr(C)]
     #[derive(Copy, Clone)]
