@@ -10,17 +10,17 @@ repository = "https://github.com/Wazzaps/bold"
 panic = "abort"
 lto = true
 debug = true
-opt-level = 'z'
+opt-level = 1
 
 [profile.test]
 lto = true
-debug = true
+debug = false
 opt-level = 'z'
 
 [profile.release]
 panic = "abort"
 lto = true
-debug = true
+debug = false
 opt-level = 'z'
 
 [dependencies]
@@ -31,5 +31,5 @@ async-trait = "0.1.50"
 futures = { version = "0.3", default-features = false, features = ["alloc"] }
 arrayvec = { version = "0.7.1", default-features = false }
 dtb = "0.2.0"
-tar-parser = { path = "externals/tar-parser.rs", default-features = false}
+tar-parser = { path = "externals/tar-parser.rs", default-features = false }
 lazy_static = { version = "1.4.0", features = ["spin_no_std"] }
