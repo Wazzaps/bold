@@ -10,7 +10,7 @@ repository = "https://github.com/Wazzaps/bold"
 panic = "abort"
 lto = true
 debug = true
-opt-level = '1'
+opt-level = 1
 
 [profile.test]
 lto = true
