@@ -1,8 +1,3 @@
 {
-    "rust-analyzer.cargo.target": "targets/aarch64-none-elf.json",
-    "rust-analyzer.checkOnSave.allTargets": false,
-    "rust-analyzer.checkOnSave.extraArgs": [
-        "--target",
-        "targets/aarch64-none-elf.json"
-    ]
+    "rust-analyzer.cargo.target": "targets/aarch64-none-elf.json"
 }
