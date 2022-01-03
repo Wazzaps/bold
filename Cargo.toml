@@ -35,4 +35,4 @@ tar-parser = { path = "externals/tar-parser.rs", default-features = false}
 lazy_static = { version = "1.4.0", features = ["spin_no_std"] }
 cortex-a = "6.1.0"
 tock-registers = "0.7.0"
-num_enum = { version = "0.5.4", default-features = false }
+num_enum = { version = "0.5.6", default-features = false }
