@@ -1,5 +1,5 @@
 use crate::arch::aarch64::exceptions::ExceptionContext;
-use crate::arch::aarch64::mmio::{delay_us_sync, get_uptime_us};
+use crate::arch::aarch64::mmio::get_uptime_us;
 use crate::arch::aarch64::mmu::PageTable;
 use crate::arch::aarch64::phymem;
 use crate::ktask;
@@ -14,13 +14,20 @@ pub(crate) static EXECUTORS: Once<[SimpleThreadExecutor; CORE_COUNT]> = Once::ne
 // static PERF_INFO: Mutex<PerfInfo> = Mutex::new(PerfInfo::new());
 static PID_COUNTER: AtomicUsize = AtomicUsize::new(1);
 
-// TODO: PerfInfo for `ps` command
-// pub struct PerfInfo {
-//     pub cpu_time_us: u64,
-//     pub total_yields: u64,
-//     pub threads_spawned: u64,
-//     pub threads_killed: u64,
-// }
+pub struct PerfInfo {
+    pub cpu_time_us: u64,
+    pub total_yields: u64,
+    pub threads_spawned: u64,
+    pub threads_killed: u64,
+}
+
+pub struct ThreadPerfInfo {
+    pub id: usize,
+    pub name: &'static [u8],
+    pub uptime_us: u64,
+    pub cpu_time_us: u64,
+    pub total_yields: u64,
+}
 
 pub unsafe fn current_core() -> usize {
     get_msr!(mpidr_el1) as usize & 0x3
@@ -41,6 +48,7 @@ pub struct Thread {
     id: usize,
     name: &'static [u8],
     start_time_us: u64,
+    last_enter_time_us: u64,
     cpu_time_us: u64,
     total_yields: u64,
     state: ExceptionContext,
@@ -60,8 +68,8 @@ impl Thread {
         let stack = unsafe {
             let mut phymem = phymem::PHYMEM_FREE_LIST.lock();
             let kernel_virtmem = phymem
-                .alloc_pages(32)
-                // 128KiB
+                .alloc_pages(64)
+                // 256KiB
                 .expect("Failed to allocate thread stack");
             kernel_virtmem.virt()
 
@@ -72,6 +80,7 @@ impl Thread {
             id,
             name,
             start_time_us: get_uptime_us(),
+            last_enter_time_us: 0,
             cpu_time_us: 0,
             total_yields: 0,
             state,
@@ -167,7 +176,7 @@ impl SimpleThreadExecutor {
                     .expect("no thread?");
 
                 let next_state = {
-                    let next_thread = next_thread.read();
+                    let mut next_thread = next_thread.write();
 
                     // Switch to next page tables
                     unsafe {
@@ -178,6 +187,8 @@ impl SimpleThreadExecutor {
                         }
                     };
 
+                    next_thread.last_enter_time_us = get_uptime_us();
+
                     // Get context to switch to
                     next_thread.state
                 };
@@ -186,6 +197,8 @@ impl SimpleThreadExecutor {
                 if let Some(last_thread) = &last_thread {
                     let mut last_thread = last_thread.write();
                     last_thread.state = *current_state;
+                    last_thread.total_yields += 1;
+                    last_thread.cpu_time_us += get_uptime_us() - last_thread.last_enter_time_us;
                 }
 
                 *current_state = next_state;
@@ -196,7 +209,7 @@ impl SimpleThreadExecutor {
                     // Run queue was updated! continue...
                     continue;
                 }
-                unsafe { asm!("wfi") };
+                // unsafe { asm!("wfi") };
             }
         }
     }
@@ -224,23 +237,23 @@ impl SimpleThreadExecutor {
         }
     }
 
-    // pub fn proc_list(&self) -> Vec<ThreadPerfInfo> {
-    //     let uptime = get_uptime_us();
-    //     self.threads
-    //         .lock()
-    //         .iter()
-    //         .map(|t| {
-    //             let t = t.read();
-    //             ThreadPerfInfo {
-    //                 id: t.id,
-    //                 name: t.name,
-    //                 uptime_us: uptime - t.start_time_us,
-    //                 cpu_time_us: t.cpu_time_us,
-    //                 total_yields: t.total_yields,
-    //             }
-    //         })
-    //         .collect()
-    // }
+    pub fn proc_list(&self) -> Vec<ThreadPerfInfo> {
+        let uptime = get_uptime_us();
+        self.threads
+            .lock()
+            .iter()
+            .map(|t| {
+                let t = t.read();
+                ThreadPerfInfo {
+                    id: t.id,
+                    name: t.name,
+                    uptime_us: uptime - t.start_time_us,
+                    cpu_time_us: t.cpu_time_us,
+                    total_yields: t.total_yields,
+                }
+            })
+            .collect()
+    }
 }
 
 pub(crate) unsafe fn init() {
@@ -257,7 +270,22 @@ pub(crate) unsafe fn init() {
                 lr: 0,
                 pc: ktask_thread as unsafe extern "C" fn() as *const () as u64,
                 sp: 0,
-                spsr: 0x344,
+                spsr: 0x304,
+            },
+            None,
+        ));
+
+        executor.spawn(Thread::new(
+            b"ktask/1",
+            ExceptionContext {
+                gpr: [
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0,
+                ],
+                lr: 0,
+                pc: ktask_thread as unsafe extern "C" fn() as *const () as u64,
+                sp: 0,
+                spsr: 0x304,
             },
             None,
         ));
@@ -267,6 +295,10 @@ pub(crate) unsafe fn init() {
 }
 
 pub unsafe fn yield_thread() {}
+
+pub fn proc_list() -> Vec<ThreadPerfInfo> {
+    EXECUTORS.wait()[0].proc_list()
+}
 
 unsafe extern "C" fn ktask_thread() {
     ktask::run();

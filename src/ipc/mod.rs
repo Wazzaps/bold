@@ -123,6 +123,13 @@ pub fn init() {
                             inner: IpcDir::new_empty(),
                         }]),
                     },
+                    IpcRef {
+                        id: well_known::DEVICES_RPI_USB_HID,
+                        inner: IpcDir::new_filled(vec![IpcRef {
+                            id: well_known::RPI_USB_HID_KEYBOARD,
+                            inner: IpcDir::new_empty(),
+                        }]),
+                    },
                 ]),
             },
         ]),

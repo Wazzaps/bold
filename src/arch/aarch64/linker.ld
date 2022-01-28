@@ -7,6 +7,7 @@ SECTIONS {
   .text : {
       KEEP(*(.text.init)) /* from init.S */
       *(.text .text.* .gnu.linkonce.t*)
+      _etext = .;
   }
 
   . = ALIGN(4096);
@@ -20,6 +21,14 @@ SECTIONS {
     __drivers_end = .;
   }
 
+  .init_array : {
+    __init_start = .;
+
+    KEEP(*(.init_array*))
+
+    __init_end = .;
+  }
+
   .data : {
     *(.data .data.* .gnu.linkonce.d* .got .got.plt)
   }
@@ -30,10 +39,11 @@ SECTIONS {
     KEEP(*(.dma))
   }
   . = ALIGN(4096);
-  __dma_end = .;
-
   .bss (NOLOAD) : {
-    . = ALIGN(32);
+    *(.dma.bss)
+    . = ALIGN(4096);
+    __dma_end = .;
+
     __bss_start = .;
     *(.bss .bss.*)
     *(COMMON)

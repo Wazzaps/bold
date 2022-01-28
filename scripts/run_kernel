@@ -11,10 +11,10 @@ QEMU_ARGS=("${@:2}")
 DEFAULT_QEMU_ARGS=(
   "-drive" "file=$BUILD_DIR/disk.img,if=sd,format=raw"
   "-initrd" "$BUILD_DIR/initrd.tar"
-  "-dtb" "dtb_files/bcm2710-rpi-3-b.dtb"
+  "-dtb" "dtb_files/bcm2710-rpi-3-b.dtb" "-device" "usb-kbd"
   "-append" "earlycon=uart1"
 )
-qemu-system-aarch64 \
+../circle-qemu/build/qemu-system-aarch64 \
   -M raspi3b -serial null -serial stdio -semihosting "${DEFAULT_QEMU_ARGS[@]}" \
-  -kernel "$KERNEL_BIN" -s -d unimp,guest_errors,mmu \
+  -kernel "$KERNEL_BIN" -s -d unimp,mmu \
   "${QEMU_ARGS[@]}" 2>&1

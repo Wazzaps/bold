@@ -6,7 +6,7 @@ use crate::ktask::thread_waker;
 use crate::prelude::*;
 use crate::threads::{current_core, Thread};
 use crate::{sleep_queue, threads};
-use core::ops::Deref;
+use core::ops::{Deref, DerefMut};
 use core::ptr::slice_from_raw_parts;
 use num_enum::TryFromPrimitive;
 
@@ -79,6 +79,12 @@ impl<const LEN: usize> Deref for PageAligned<LEN> {
     }
 }
 
+impl<const LEN: usize> DerefMut for PageAligned<LEN> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
 pub async fn usermode() {
     // Prepare code
     const CODE_BYTES: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/example_app.bin"));
@@ -128,7 +134,7 @@ pub async fn usermode() {
                 lr: 0,
                 pc: 0x20000,
                 sp: 0x20000,
-                spsr: 0x340,
+                spsr: 0x300,
             },
             Some(page_tables),
         );

@@ -7,7 +7,8 @@ use crate::ktask::null_waker;
 use crate::prelude::*;
 use crate::threads::current_core;
 use crate::{sleep_queue, threads};
-use core::sync::atomic::{AtomicU32, AtomicU64, Ordering};
+use core::mem::transmute;
+use core::sync::atomic::{AtomicU32, AtomicU64, AtomicUsize, Ordering};
 use core::task::Waker;
 use cortex_a::registers::DAIF;
 use spin::Mutex;
@@ -20,7 +21,59 @@ static CALIBRATION_START_TICKS: AtomicU32 = AtomicU32::new(0);
 static CALIBRATION_START_UPTIME_US: AtomicU64 = AtomicU64::new(0);
 static TIMER_FACTOR: AtomicU32 = AtomicU32::new(0);
 
+// FIXME: Do this better
+static IRQ_HANDLERS: [IrqHandler; 32] = [
+    IrqHandler::default(),
+    IrqHandler::default(),
+    IrqHandler::default(),
+    IrqHandler::default(),
+    IrqHandler::default(),
+    IrqHandler::default(),
+    IrqHandler::default(),
+    IrqHandler::default(),
+    IrqHandler::default(),
+    IrqHandler::default(),
+    IrqHandler::default(),
+    IrqHandler::default(),
+    IrqHandler::default(),
+    IrqHandler::default(),
+    IrqHandler::default(),
+    IrqHandler::default(),
+    IrqHandler::default(),
+    IrqHandler::default(),
+    IrqHandler::default(),
+    IrqHandler::default(),
+    IrqHandler::default(),
+    IrqHandler::default(),
+    IrqHandler::default(),
+    IrqHandler::default(),
+    IrqHandler::default(),
+    IrqHandler::default(),
+    IrqHandler::default(),
+    IrqHandler::default(),
+    IrqHandler::default(),
+    IrqHandler::default(),
+    IrqHandler::default(),
+    IrqHandler::default(),
+];
+
 const CALIBRATION_DURATION: u32 = 100 * 1000; // 100 ms
+
+pub type IrqHandlerFunc = unsafe extern "C" fn(usize);
+
+pub struct IrqHandler {
+    func: AtomicUsize,
+    arg: AtomicUsize,
+}
+
+impl IrqHandler {
+    const fn default() -> Self {
+        IrqHandler {
+            func: AtomicUsize::new(0),
+            arg: AtomicUsize::new(0),
+        }
+    }
+}
 
 pub struct IrqLock {
     prev_state: u64,
@@ -29,8 +82,8 @@ pub struct IrqLock {
 pub fn irq_lock() -> IrqLock {
     let prev_state = unsafe { get_msr!(DAIF) };
     unsafe { disable() };
-    assert_eq!(unsafe { get_msr!(DAIF) } & (1 << 7), 1 << 7);
-    assert_eq!(unsafe { get_msr!(DAIF) }, DAIF.get());
+    // assert_eq!(unsafe { get_msr!(DAIF) } & (1 << 7), 1 << 7);
+    // assert_eq!(unsafe { get_msr!(DAIF) }, DAIF.get());
     IrqLock { prev_state }
 }
 
@@ -42,11 +95,14 @@ impl Drop for IrqLock {
 }
 
 pub unsafe fn enable() {
-    set_msr_const!(daifclr, 2);
+    set_msr_const!(daifclr, 1 | 2);
+}
+pub unsafe fn enable_fiq() {
+    set_msr_const!(daifclr, 1);
 }
 
 pub unsafe fn disable() {
-    set_msr_const!(daifset, 2);
+    set_msr_const!(daifset, 1 | 2);
 }
 
 pub unsafe fn init() {
@@ -175,11 +231,44 @@ unsafe fn handle_timer(e: &mut ExceptionContext) {
 }
 
 pub unsafe fn handle_irq(e: &mut ExceptionContext) {
-    let pending = mmio_read(IRQ_PENDING_1);
-    match pending {
-        SYSTEM_TIMER_IRQ_1 => handle_timer(e),
-        _ => {
-            panic!("Unknown IRQ: 0x{:x}", pending);
+    let mut pending = mmio_read(IRQ_PENDING_1);
+
+    if (pending & SYSTEM_TIMER_IRQ_1) != 0 {
+        handle_timer(e);
+        pending &= !SYSTEM_TIMER_IRQ_1;
+    }
+
+    if pending != 0 {
+        // Required because Circle's irqlock verifies FIQs are not masked
+        enable_fiq();
+
+        for irq in 4..32 {
+            if ((1 << irq) & pending) != 0 {
+                let handler = &IRQ_HANDLERS[irq];
+                let func = handler.func.load(Ordering::SeqCst);
+                if func != 0 {
+                    let arg = handler.arg.load(Ordering::SeqCst);
+                    let func = transmute::<_, IrqHandlerFunc>(func);
+                    (func)(arg);
+                    pending &= !(1 << irq);
+                }
+            }
         }
-    };
+
+        if pending != 0 {
+            panic!("Unknown IRQ(s): 0x{:x}", pending);
+        }
+    }
+}
+
+pub unsafe fn attach_irq_handler(irq: usize, func: IrqHandlerFunc, arg: usize) {
+    let handler = &IRQ_HANDLERS[irq];
+    handler.arg.store(arg, Ordering::SeqCst);
+    handler.func.store(func as usize, Ordering::SeqCst);
+}
+
+pub unsafe fn detach_irq_handler(irq: usize) {
+    let handler = &IRQ_HANDLERS[irq];
+    handler.func.store(0, Ordering::SeqCst);
+    handler.arg.store(0, Ordering::SeqCst);
 }

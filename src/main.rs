@@ -36,6 +36,7 @@ pub(crate) mod utils;
 use crate::arch::aarch64::uart1::init_uart1;
 use crate::prelude::*;
 
+use crate::arch::aarch64::mmio::sleep_us;
 use core::ptr::slice_from_raw_parts;
 pub(crate) use file_interface as fi;
 
@@ -254,9 +255,33 @@ unsafe extern "C" fn kmain_on_stack(dtb_addr: PhyAddr) -> ! {
     // sdhc.read_block(0, &mut buf).unwrap();
     // assert_eq!(buf[0], 0xdeadbeef);
 
+    spawn_task!(b"CircleShim.USB", {
+        let root = ipc::ROOT.read().as_ref().unwrap().clone();
+        let output_queue = root
+            .dir_get(ipc::well_known::ROOT_DEVICES)
+            .await
+            .unwrap()
+            .dir_get(ipc::well_known::DEVICES_RPI_USB_HID)
+            .await
+            .unwrap()
+            .dir_get(ipc::well_known::RPI_USB_HID_KEYBOARD)
+            .await
+            .unwrap()
+            .dir_link(
+                ipc::well_known::RPI_USB_HID_KEYBOARD_KEYS,
+                ipc::IpcSpscQueue::new(),
+            )
+            .await
+            .unwrap();
+
+        println!("[INFO] Starting CircleShim");
+        arch::aarch64::usb::init(output_queue).await;
+    });
+
     spawn_task!(b"KShell.launcher", {
         let root = ipc::ROOT.read().as_ref().unwrap().clone();
 
+        sleep_us(1000 * 200).await; // FIXME: Wait for paths to appear
         async fn navigate(mut root: ipc::IpcRef, path: &[u64]) -> ipc::IpcRef {
             for p in path {
                 root = root.dir_get(*p).await.unwrap();
@@ -264,17 +289,16 @@ unsafe extern "C" fn kmain_on_stack(dtb_addr: PhyAddr) -> ! {
             root
         }
 
-        // TODO: Non-functional until usb
-        // let fb_shell_in = navigate(
-        //     root.clone(),
-        //     &[
-        //         ipc::well_known::ROOT_DEVICES,
-        //         ipc::well_known::DEVICES_RPI_FB_CON,
-        //         ipc::well_known::RPI_FB_CON0,
-        //         ipc::well_known::RPI_FB_CON_IN,
-        //     ],
-        // )
-        // .await;
+        let fb_shell_in = navigate(
+            root.clone(),
+            &[
+                ipc::well_known::ROOT_DEVICES,
+                ipc::well_known::DEVICES_RPI_USB_HID,
+                ipc::well_known::RPI_USB_HID_KEYBOARD,
+                ipc::well_known::RPI_USB_HID_KEYBOARD_KEYS,
+            ],
+        )
+        .await;
 
         let fb_shell_out = navigate(
             root.clone(),
@@ -309,11 +333,8 @@ unsafe extern "C" fn kmain_on_stack(dtb_addr: PhyAddr) -> ! {
         )
         .await;
 
-        kshell::launch(
-            uart_shell_in,
-            ipc::spsc_mux::mux_into_outputs(uart_shell_out, fb_shell_out),
-            false,
-        );
+        kshell::launch(uart_shell_in, uart_shell_out, true);
+        kshell::launch(fb_shell_in, fb_shell_out, false);
     });
 
     threads::init();

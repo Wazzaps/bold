@@ -200,7 +200,7 @@ impl SimpleExecutor {
                 }
 
                 // TODO: replace with `yield_thread`
-                unsafe { asm!("wfi") };
+                // unsafe { asm!("wfi") };
             }
         }
     }

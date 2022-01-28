@@ -1,3 +1,9 @@
 [submodule "externals/tar-parser.rs"]
 	path = externals/tar-parser.rs
 	url = https://github.com/Raz-B/tar-parser.rs.git
+[submodule "externals/csud-sys/vendor"]
+	path = externals/csud-sys/vendor
+	url = git@github.com:Chadderz121/csud.git
+[submodule "externals/circle-sys/vendor"]
+	path = externals/circle-sys/vendor
+	url = git@github.com:rsta2/circle.git

@@ -13,6 +13,7 @@ pub(crate) mod sdhc;
 pub(crate) mod dtb;
 pub(crate) mod interrupts;
 pub(crate) mod uart1;
+pub(crate) mod usb;
 pub(crate) mod virtmem;
 
 #[macro_export]

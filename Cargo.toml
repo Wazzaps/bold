@@ -22,17 +22,24 @@ panic = "abort"
 lto = true
 debug = true
 opt-level = 'z'
+incremental = true
 
 [dependencies]
 linked_list_allocator = "0.9"
-spin = "0.9.2"
+spin = "0.7.1"
 qemu-exit = "2.0.1"
 async-trait = "0.1.51"
 futures = { version = "0.3", default-features = false, features = ["alloc"] }
 arrayvec = { version = "0.7.1", default-features = false }
 dtb = "0.2.0"
 tar-parser = { path = "externals/tar-parser.rs", default-features = false}
+# csud-sys = { path = "externals/csud-sys" }
+circle-sys = { path = "externals/circle-sys" }
 lazy_static = { version = "1.4.0", features = ["spin_no_std"] }
 cortex-a = "6.1.0"
 tock-registers = "0.7.0"
 num_enum = { version = "0.5.4", default-features = false }
+lock_api = "0.4.5"
+#spinning_top = "0.2.4"
+buddy_system_allocator = "0.8.0"
+

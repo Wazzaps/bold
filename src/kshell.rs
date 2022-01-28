@@ -3,10 +3,10 @@ use crate::arch::aarch64::mmio::get_uptime_us;
 use crate::arch::aarch64::mmio::sleep_us;
 use crate::driver_manager::DeviceType;
 use crate::framebuffer::FramebufferCM;
-use crate::ktask;
 use crate::prelude::*;
 use crate::{driver_manager, framebuffer_console, syscalls};
 use crate::{fonts, ipc};
+use crate::{ktask, threads};
 use futures::future::BoxFuture;
 use futures::stream;
 use futures::StreamExt;
@@ -275,6 +275,7 @@ impl KShell {
                              cd <PATH>   : Change directory\n\
                              info        : Display system info\n\
                              ps          : Process list\n\
+                             tps         : Task list\n\
                              init        : Start usermode\n\
                              gfx         : Benchmark graphics\n\
                              font <FONT> : Change framebuffer font"
@@ -286,6 +287,7 @@ impl KShell {
                     b"font" => self.handle_cmd_font(&words).await,
                     b"info" => self.handle_cmd_info(&words).await,
                     b"ps" => self.handle_cmd_ps(&words).await,
+                    b"tps" => self.handle_cmd_tps(&words).await,
                     b"init" => self.handle_cmd_init(&words).await,
                     b"gfx" => self.handle_cmd_gfx(&words).await,
                     _ => {
@@ -479,6 +481,24 @@ impl KShell {
         queue_writeln!(
             self.output.clone(),
             "     PID   Uptime  CPUTime   Yields Name"
+        );
+        for thread in threads::proc_list() {
+            queue_writeln!(
+                self.output.clone(),
+                "{: >8} {: >8} {: >8} {: >8} {}",
+                thread.id,
+                DurationFmt(thread.uptime_us),
+                DurationFmt(thread.cpu_time_us),
+                thread.total_yields,
+                AsciiStr(thread.name),
+            );
+        }
+    }
+
+    async fn handle_cmd_tps(&mut self, _words: &[&[u8]]) {
+        queue_writeln!(
+            self.output.clone(),
+            "     TID   Uptime  CPUTime   Yields Name"
         );
         for task in ktask::proc_list() {
             queue_writeln!(
